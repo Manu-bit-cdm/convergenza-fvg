@@ -251,12 +251,9 @@ button,.dir-btn{touch-action:manipulation;min-height:36px;cursor:pointer}
 </div>
 <div class="mono" style="text-align:center;margin-top:10px;margin-bottom:4px;font-size:9px;color:#1A2535">FVG Convergenza Monitor v1.0 · ECMWF+ICON-D2+AROME</div>
 
+<script>try{document.getElementById('stxt').textContent='JS mini OK';}catch(e){}</script>
 <script>
-// DIAGNOSTICO: questo messaggio appare SUBITO se JS gira
-(function(){
-  var el=document.getElementById('stxt');
-  if(el) el.textContent='JS OK — attesa Leaflet...';
-})();
+// DIAGNOSTICO
 
 // ─── FUNZIONI TOGGLE
 var layerVis={pred:true,conv:false,pioggia:false};
