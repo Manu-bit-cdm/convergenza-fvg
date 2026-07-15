@@ -1,0 +1,1444 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Previsione Fenomeni Forti — FVG</title>
+
+<!-- PWA / Home Screen -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Fenomeni Forti FVG">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#060A12">
+<link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADDPmHLAAAABmJLR0QA/wD/AP+gvaeTAAABhklEQVR4nO3BMQEAAADCoPVP7WsIoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAeAMBuAABHgAAAABJRU5ErkJggg==">
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html{height:100%;background:#060A12}
+body{
+  background:#060A12;color:#E2E8F0;
+  font-family:-apple-system,'Segoe UI',system-ui,sans-serif;
+  padding:12px;
+  padding-top:max(12px,env(safe-area-inset-top));
+  padding-bottom:max(20px,env(safe-area-inset-bottom));
+  padding-left:max(12px,env(safe-area-inset-left));
+  padding-right:max(12px,env(safe-area-inset-right));
+  max-width:480px;margin:0 auto;min-height:100vh;
+  -webkit-overflow-scrolling:touch;overflow-x:hidden;
+}
+.mono{font-family:'Courier New',monospace}
+.sc{background:#0A1422;border:1px solid #1A2E45;border-radius:10px;padding:14px;margin-bottom:11px}
+.rc{border-radius:14px;padding:16px;margin-bottom:11px;border:1px solid transparent;transition:all .3s}
+.row{display:flex;justify-content:space-between;align-items:flex-start}
+.sb{background:#040C1A;color:#06B6D4;font-size:9px;padding:1px 6px;border-radius:3px;letter-spacing:1px;font-family:'Courier New',monospace}
+.bs{display:inline-block;border-radius:4px;padding:1px 7px;font-size:10px;margin-top:2px}
+.ci{display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid #0A1018}
+.ci:last-child{border-bottom:none}
+.cc{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;border:2px solid}
+.sl{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #0A1018;text-decoration:none;color:inherit}
+.sl:last-child{border-bottom:none}
+.mr{display:flex;align-items:center;padding:5px 0;border-bottom:1px solid #0A1018;font-size:10px;gap:6px}
+.mr:last-child{border-bottom:none}
+.mbw{flex:1;background:#05080F;border-radius:2px;height:5px;overflow:hidden}
+.mb{height:100%;border-radius:2px;transition:width .3s}
+.pc{background:#0A1422;border-radius:9px;padding:10px 13px;margin-bottom:6px;border:1px solid transparent;border-left:3px solid transparent}
+header{text-align:center;margin-bottom:11px}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+#sdot{width:7px;height:7px;border-radius:50%;flex-shrink:0;margin-right:5px;transition:background .3s}
+
+/* ── Slider touch-friendly ── */
+input[type=range]{width:100%;cursor:pointer;display:block;height:34px;-webkit-appearance:none;appearance:none;background:transparent;padding:8px 0}
+input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:#1A2E45}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;border-radius:50%;margin-top:-10px;box-shadow:0 0 4px rgba(0,0,0,.5)}
+button,.dir-btn{touch-action:manipulation;min-height:36px;cursor:pointer}
+.leaflet-container{touch-action:pan-x pan-y}
+
+/* ── LAYOUT SEMPLICE — colonna unica, tutto scorre ── */
+#desktopGrid{display:block}
+#leftCol{display:block}
+#rightCol{display:block}
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+.city-lbl{background:transparent!important;border:none!important;box-shadow:none!important;color:#64748B;font-size:9px;font-family:-apple-system,sans-serif;white-space:nowrap;padding:0!important}
+.jal-lbl{background:transparent!important;border:none!important;box-shadow:none!important;color:#F59E0B;font-size:10px;font-family:-apple-system,sans-serif;font-weight:700;white-space:nowrap;padding:0!important}
+.leaflet-tooltip::before{display:none!important}
+.leaflet-control-attribution{font-size:7px!important;background:rgba(6,10,18,.7)!important;color:#334155!important}
+.leaflet-control-attribution a{color:#475569!important}
+.leaflet-bar a{background:#0A1422!important;color:#06B6D4!important;border-color:#1A2E45!important;min-width:30px;min-height:30px;line-height:30px;font-size:16px!important}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="mono" style="font-size:9px;color:#06B6D4;letter-spacing:3px;margin-bottom:5px">MONITOR CONVERGENZE · FVG CENTRO-ORIENTALE</div>
+  <h1 style="font-size:17px;font-weight:700;color:#F8FAFC">Previsione Fenomeni Forti — FVG</h1>
+  <p style="font-size:10px;color:#475569;margin-top:3px">Jalmicco · Lauzacco · Percoto · Trivignano · Udine · Gorizia · Cividale</p>
+</header>
+
+<!-- STATUS -->
+<div id="statusBar" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:11px;padding:6px 10px;background:#0A1422;border-radius:8px;border:1px solid #1A2E45;font-size:10px;color:#475569;flex-shrink:0">
+  <div style="display:flex;align-items:center"><div id="sdot"></div><span id="stxt">Caricamento dati...</span></div>
+  <span id="srun" class="mono" style="color:#334155;font-size:9px"></span>
+</div>
+
+<!-- TIME SLIDER -->
+<div class="sc" id="sliderCard" style="padding:11px 14px">
+  <div style="text-align:center;margin-bottom:8px">
+    <div id="tlabel" class="mono" style="font-size:22px;font-weight:700;color:#06B6D4;line-height:1">--</div>
+    <div id="tdate" style="font-size:10px;color:#475569;margin-top:2px">seleziona ora</div>
+  </div>
+  <input type="range" id="tslider" min="0" max="47" value="0" step="1"
+    style="width:100%;cursor:pointer;display:block;accent-color:#06B6D4;margin-bottom:5px">
+  <div style="display:flex;justify-content:space-between;font-size:9px;color:#334155">
+    <span id="tl0">Adesso</span>
+    <span style="color:#06B6D4" id="tlm">+24h</span>
+    <span id="tl47">+48h</span>
+  </div>
+</div>
+
+<!-- MAP -->
+<div id="mapWrapper" style="border-radius:12px 12px 0 0;overflow:hidden;border:1px solid #1A2E45;border-bottom:none;margin-bottom:0">
+  <div id="mapContainer" style="height:290px;background:#0C1B2E"></div>
+</div>
+<!-- Barra info unificata — sotto mappa, fuori dall'overlay -->
+<div style="background:#0A1422;border:1px solid #1A2E45;border-top:none;border-radius:0 0 12px 12px;padding:6px 10px;margin-bottom:11px;display:flex;align-items:center;flex-wrap:wrap;gap:5px;font-size:9px;line-height:1.6">
+  <span id="riskOv" style="font-size:10px;font-weight:700;color:#475569">---</span>
+  <span style="color:#1E3050;font-size:11px">│</span>
+  <span style="font-family:'Courier New',monospace;color:#06B6D4">SST <span id="sstDisp">--</span>°C</span>
+  <span style="color:#64748B">· 850hPa <span id="windDisp" style="color:#94A3B8">--</span></span>
+  <span style="color:#1E3050;font-size:11px">│</span>
+  <span style="color:#64748B;display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+    <span><span style="display:inline-block;width:7px;height:7px;border:1.5px dashed #EAB308;vertical-align:middle;margin-right:2px"></span>Temp.</span>
+    <span><span style="display:inline-block;width:7px;height:7px;border-radius:50%;border:1.5px dashed #7C3AED;vertical-align:middle;margin-right:2px"></span>Conv.</span>
+    <span><span style="display:inline-block;width:10px;border-top:1.5px dashed #7C3AED;vertical-align:middle;margin-right:2px"></span>Asse conv.</span>
+    <span><span style="display:inline-block;width:10px;border-top:2px dashed #F59E0B;vertical-align:middle;margin-right:2px"></span>Asse lagunare</span>
+  </span>
+  <!-- Timestamp radar + toggle -->
+  <span style="margin-left:auto;display:flex;align-items:center;gap:6px">
+    <span id="radarTime" style="font-size:8px;color:#334155;font-family:'Courier New',monospace"></span>
+    <button id="radarToggle" onclick="toggleRadar()" style="background:#0A1422;border:1px solid #1A2E45;border-radius:5px;color:#06B6D4;font-size:9px;padding:2px 7px;cursor:pointer;touch-action:manipulation">📡 Radar</button>
+  </span>
+  <span style="display:flex;gap:2px;align-items:center">
+    <span style="color:#22C55E">■</span>
+    <span style="color:#EAB308">■</span>
+    <span style="color:#F97316">■</span>
+    <span style="color:#EF4444">■</span>
+  </span>
+</div>
+
+<!-- TOGGLE LAYER + PRECIP PANEL -->
+<div style="margin-bottom:8px">
+  <!-- 3 toggle layer -->
+  <div style="display:flex;gap:6px;margin-bottom:6px">
+    <button id="btn_pred"
+      onclick="var a=layerVis.pred=!layerVis.pred;this.style.background=a?'#92400E':'#0A1422';this.style.color=a?'#FCD34D':'#475569';this.style.borderColor=a?'#F59E0B':'#1A2E45';toggleLayer('pred')"
+      style="flex:1;padding:6px 4px;border-radius:7px;border:1px solid #06B6D4;font-size:10px;font-weight:700;cursor:pointer;touch-action:manipulation;background:#1A2E45;color:#E2E8F0;transition:all .2s">
+      ⛈ Predisposizione</button>
+    <button id="btn_conv"
+      onclick="var a=layerVis.conv=!layerVis.conv;this.style.background=a?'#3B0764':'#0A1422';this.style.color=a?'#C4B5FD':'#475569';this.style.borderColor=a?'#7C3AED':'#1A2E45';toggleLayer('conv')"
+      style="flex:1;padding:6px 4px;border-radius:7px;border:1px solid #1A2E45;font-size:10px;font-weight:600;cursor:pointer;touch-action:manipulation;background:#0A1422;color:#475569;transition:all .2s">
+      💧 Convergenze</button>
+    <button id="btn_pioggia"
+      onclick="var a=layerVis.pioggia=!layerVis.pioggia;this.style.background=a?'#0C4A6E':'#0A1422';this.style.color=a?'#7DD3FC':'#475569';this.style.borderColor=a?'#0284C7':'#1A2E45';toggleLayer('pioggia')"
+      style="flex:1;padding:6px 4px;border-radius:7px;border:1px solid #1A2E45;font-size:10px;font-weight:600;cursor:pointer;touch-action:manipulation;background:#0A1422;color:#475569;transition:all .2s">
+      🌧 Pioggia</button>
+  </div>
+  <!-- Selettore finestra temporale (visibile solo con pioggia attivo) -->
+  <div id="precipCtrl" style="display:none;align-items:center;gap:5px;margin-bottom:6px">
+    <span style="font-size:9px;color:#64748B;flex-shrink:0">Accumulo previsto:</span>
+    <button class="tbtn" data-h="3"  onclick="setPrecipWindow(3)"  style="padding:3px 9px;border-radius:5px;border:1px solid #1A2E45;font-size:10px;cursor:pointer;background:#0A1422;color:#475569">3h</button>
+    <button class="tbtn" data-h="6"  onclick="setPrecipWindow(6)"  style="padding:3px 9px;border-radius:5px;border:1px solid #1A2E45;font-size:10px;cursor:pointer;background:#1A2E45;color:#06B6D4">6h</button>
+    <button class="tbtn" data-h="12" onclick="setPrecipWindow(12)" style="padding:3px 9px;border-radius:5px;border:1px solid #1A2E45;font-size:10px;cursor:pointer;background:#0A1422;color:#475569">12h</button>
+    <button class="tbtn" data-h="24" onclick="setPrecipWindow(24)" style="padding:3px 9px;border-radius:5px;border:1px solid #1A2E45;font-size:10px;cursor:pointer;background:#0A1422;color:#475569">24h</button>
+  </div>
+  <!-- Pannello valori precipitazione per punto (visibile solo con pioggia attivo) -->
+  <div id="precipPanel" style="display:none;background:#0A1422;border:1px solid #1A2E45;border-radius:10px;padding:10px 12px;font-size:9px">
+    <div style="color:#06B6D4;letter-spacing:2px;text-transform:uppercase;font-size:8px;margin-bottom:6px">
+      🌧 Precipitazioni previste per zona
+      <span style="color:#334155;font-size:8px;float:right">▐ 0 ▐ 5mm ▐ 20mm ▐ 35mm+</span>
+    </div>
+    <div id="precipList"></div>
+  </div>
+</div>
+
+<!-- DUAL RISK PANELS -->
+<div id="dualRisk" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:11px">
+  <div id="tCard" style="background:#05080A;border-radius:12px;padding:13px;border:1px solid transparent;transition:all .3s">
+    <div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#64748B;margin-bottom:6px">⛈ Predisposizione</div>
+    <div id="tScore" class="mono" style="font-size:32px;font-weight:700;line-height:1;color:#22C55E">--</div>
+    <div style="display:flex;align-items:baseline;gap:7px">
+      <div style="font-size:9px;color:#334155">/ 12 pt</div>
+      <div id="tProb" style="font-size:10px;font-weight:700;color:#38BDF8">~--%</div>
+    </div>
+    <div style="background:#040810;border-radius:2px;height:4px;overflow:hidden;margin:8px 0">
+      <div id="tBar" style="height:100%;border-radius:2px;background:linear-gradient(90deg,#22C55E,#EAB308 40%,#EF4444);transition:width .3s;width:0%"></div>
+    </div>
+    <div id="tLabel" style="font-size:10px;font-weight:700;color:#22C55E;margin-bottom:2px">---</div>
+  </div>
+  <div id="cCard" style="background:#05080A;border-radius:12px;padding:13px;border:1px solid transparent;transition:all .3s">
+    <div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#64748B;margin-bottom:6px">🌧 Convergenze</div>
+    <div id="cScore" class="mono" style="font-size:32px;font-weight:700;line-height:1;color:#38BDF8">--</div>
+    <div style="font-size:9px;color:#334155">/ 12 pt</div>
+    <div style="background:#040810;border-radius:2px;height:4px;overflow:hidden;margin:8px 0">
+      <div id="cBar" style="height:100%;border-radius:2px;background:linear-gradient(90deg,#38BDF8,#818CF8 40%,#EF4444);transition:width .3s;width:0%"></div>
+    </div>
+    <div id="cLabel" style="font-size:10px;font-weight:700;color:#38BDF8;margin-bottom:2px">---</div>
+  </div>
+</div>
+
+<!-- SCENARIO CARD -->
+<div id="rcard" class="rc" style="background:#05080A">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    <div style="font-size:9px;color:#64748B;letter-spacing:2px;text-transform:uppercase">Scenario combinato</div>
+    <div id="seasLabel" class="mono" style="font-size:9px;color:#334155;letter-spacing:.5px"></div>
+  </div>
+  <div id="stype" style="font-weight:700;font-size:14px;margin-bottom:6px"></div>
+  <!-- Badge tipo di innesco -->
+  <div id="triggerBadge" style="display:none;align-items:center;gap:8px;padding:6px 10px;border-radius:7px;background:#040C1A;border-left:3px solid #475569;margin-bottom:8px">
+    <span id="triggerIcon" style="font-size:18px;flex-shrink:0"></span>
+    <div style="min-width:0;flex:1">
+      <div style="font-size:9px;color:#64748B;letter-spacing:1px;text-transform:uppercase;margin-bottom:1px">Tipo di innesco</div>
+      <div id="triggerTipo" style="font-size:11px;font-weight:700;color:#94A3B8"></div>
+      <div id="triggerDesc" style="font-size:10px;color:#475569;margin-top:2px;line-height:1.4"></div>
+    </div>
+    <div id="triggerRisk" style="font-size:9px;color:#64748B;text-align:right;flex-shrink:0;max-width:90px;line-height:1.4"></div>
+  </div>
+  <div id="sdesc" style="font-size:11px;color:#64748B;line-height:1.4;margin-bottom:10px"></div>
+  <div style="border-top:1px solid #0A1020;padding-top:8px;display:flex;justify-content:space-between;align-items:center">
+    <div>
+      <div style="font-size:9px;color:#64748B;text-transform:uppercase;letter-spacing:1px">Accumulo stimato</div>
+      <div id="accum" class="mono" style="font-size:14px;font-weight:700;margin-top:2px"></div>
+    </div>
+    <div id="rsub" style="font-size:11px;color:#475569;text-align:right;max-width:130px"></div>
+  </div>
+</div>
+
+<!-- MODEL COMPARISON -->
+<div class="sc" id="mcompCard">
+  <div style="font-size:9px;color:#06B6D4;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px">Confronto Modelli</div>
+  <div style="font-size:9px;color:#334155;margin-bottom:8px">CAPE / PWAT / T850 — valori al timestep selezionato</div>
+  <div id="mcomp"><div style="text-align:center;padding:12px;color:#475569;font-size:11px">⏳ Caricamento...</div></div>
+</div>
+
+<!-- PARAMETERS -->
+<div class="sc" id="pgridCard">
+  <div style="font-size:9px;color:#06B6D4;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px">Parametri Diagnostici — ECMWF primario</div>
+  <div id="pgrid"></div>
+</div>
+
+<!-- CHECKLIST -->
+<div class="sc" id="cklistCard">
+  <div style="font-size:9px;color:#06B6D4;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px">Checklist — 7 condizioni chiave Jalmicco</div>
+  <div id="cklist"></div>
+  <div id="ckres" style="margin-top:10px;padding:9px 12px;border-radius:6px;font-size:12px;font-weight:600;text-align:center;border:1px solid transparent"></div>
+</div>
+
+<!-- SOURCES -->
+<div class="sc" id="sourcesCard" style="margin-bottom:0">
+  <div style="font-size:9px;color:#06B6D4;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px">Fonti</div>
+  <a class="sl" href="https://www.meteo.fvg.it" target="_blank"><div><div style="font-weight:600;font-size:12px;color:#06B6D4">OSMER FVG</div><div style="font-size:11px;color:#475569">Radar e previsioni regionali</div></div><span style="color:#06B6D4">↗</span></a>
+  <a class="sl" href="https://open-meteo.com" target="_blank"><div><div style="font-weight:600;font-size:12px;color:#06B6D4">Open-Meteo API</div><div style="font-size:11px;color:#475569">ECMWF IFS · ICON-D2 · ICON-EU</div></div><span style="color:#06B6D4">↗</span></a>
+  <a class="sl" href="https://www.radarmeteo.com" target="_blank"><div><div style="font-weight:600;font-size:12px;color:#06B6D4">Radarmeteo</div><div style="font-size:11px;color:#475569">Mosaico radar in tempo reale</div></div><span style="color:#06B6D4">↗</span></a>
+  <a class="sl" href="https://mappe.protezionecivile.gov.it" target="_blank"><div><div style="font-weight:600;font-size:12px;color:#06B6D4">DPC Allerta Meteo</div><div style="font-size:11px;color:#475569">Bollettini allerta meteo-idrogeologica</div></div><span style="color:#06B6D4">↗</span></a>
+  <a class="sl" href="https://www.meteorologix.com" target="_blank"><div><div style="font-weight:600;font-size:12px;color:#06B6D4">MeteorologiX</div><div style="font-size:11px;color:#475569">Riferimento visivo ICON-RUC</div></div><span style="color:#06B6D4">↗</span></a>
+</div>
+<div class="mono" style="text-align:center;margin-top:10px;margin-bottom:4px;font-size:9px;color:#1A2535">FVG Convergenza Monitor v1.0 · ECMWF+ICON-D2+AROME</div>
+
+<script>
+// DIAGNOSTICO: questo messaggio appare SUBITO se JS gira
+(function(){
+  var el=document.getElementById('stxt');
+  if(el) el.textContent='JS OK — attesa Leaflet...';
+})();
+
+// ─── FUNZIONI TOGGLE
+var layerVis={pred:true,conv:false,pioggia:false};
+var precipWin=6;
+var PRECIP_DATA=null;
+var PRECIP_LAYER=null;
+var HEAT_LAYER=null;
+
+function toggleLayer(name){
+  // Stato e colore pulsante gestiti inline nell'onclick
+  // Qui gestiamo solo le conseguenze sul layer/mappa
+  try{
+    if(name==='pioggia'){
+      var pc=document.getElementById('precipCtrl');
+      var pp=document.getElementById('precipPanel');
+      if(pc) pc.style.display=layerVis.pioggia?'flex':'none';
+      if(pp) pp.style.display=layerVis.pioggia?'block':'none';
+      if(layerVis.pioggia){
+        if(!PRECIP_DATA){
+          var el=document.getElementById('precipList');
+          if(el) el.innerHTML='<div style="text-align:center;color:#475569;padding:8px;font-size:10px">⏳ Caricamento dati...</div>';
+        }else{
+          if(typeof updatePrecipLayer==='function') updatePrecipLayer();
+          if(typeof updatePrecipPanel==='function') updatePrecipPanel();
+        }
+      }else{
+        if(PRECIP_LAYER&&LM&&LM.hasLayer(PRECIP_LAYER)) LM.removeLayer(PRECIP_LAYER);
+      }
+    }
+    if(name==='conv'){
+      var sl=document.getElementById('tslider');
+      if(D&&typeof upd==='function') upd(sl?parseInt(sl.value):0);
+    }
+    if(name==='pred'){
+      // Aggiorna visibilità poligoni zona tramite upd()
+      var sl=document.getElementById('tslider');
+      if(typeof D!=='undefined'&&D&&typeof upd==='function') upd(sl?parseInt(sl.value):0);
+    }
+  }catch(e){console.warn('toggleLayer:',e.message);}
+}
+
+function setPrecipWindow(h){
+  precipWin=h;
+  document.querySelectorAll('.tbtn').forEach(function(b){
+    b.style.background=parseInt(b.dataset.h)===h?'#1A2E45':'#0A1422';
+    b.style.color=parseInt(b.dataset.h)===h?'#06B6D4':'#475569';
+  });
+  if(typeof updatePrecipLayer==='function') updatePrecipLayer();
+  if(typeof updatePrecipPanel==='function') updatePrecipPanel();
+}
+
+// ═══════════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════════
+const LAT=46.06,  LON=13.24;          // Udine/FVG centrale
+const LAT_A=46.62,LON_A=14.31;        // Carinzia (ΔP MSLP)
+const LAT_G=45.68,LON_G=13.40;        // Grado (SST)
+const LAT_ISO=45.95,LON_ISO=13.55;    // Gorizia/Isonzo — punto orientale FVG per ΔWD convergenza
+
+// ─── 8 punti precipitazioni FVG ────────────────────
+const PRECIP_PTS=[
+  {name:'Gemona',    lat:46.27,lon:13.13},
+  {name:'Udine',     lat:46.06,lon:13.23},
+  {name:'Cividale',  lat:46.10,lon:13.43},
+  {name:'Pordenone', lat:45.96,lon:12.66},
+  {name:'Palmanova', lat:45.90,lon:13.31},
+  {name:'Gorizia',   lat:45.94,lon:13.62},
+  {name:'Grado',     lat:45.68,lon:13.40},
+  {name:'Marano',    lat:45.77,lon:13.17},
+];
+
+// ═══════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════
+let D=null, H0=0;
+
+// ═══════════════════════════════════════════════════
+// RISK + SCENARIO TABLES
+// ═══════════════════════════════════════════════════
+// ⛈ PREDISPOSIZIONE CONVETTIVA (score 0-12: CAPE+CIN+Shear+LI)
+const RT=[
+  {m:3, l:'Predisposizione nulla',        s:'Atmosfera stabile — assenza di condizioni convettive',               c:'#22C55E',bg:'#040A04'},
+  {m:5, l:'Predisposizione bassa',        s:'Instabilità marginale — celle isolate se si attiva un trigger',      c:'#38BDF8',bg:'#030A10'},
+  {m:7, l:'Predisposizione moderata',     s:'Ambiente favorevole — celle intense se si attiva il trigger locale', c:'#EAB308',bg:'#0C0900'},
+  {m:9, l:'Predisposizione alta',         s:'Ambiente molto favorevole — sistemi organizzati probabili',          c:'#F97316',bg:'#0C0400'},
+  {m:12,l:'Predisposizione molto alta ⚠', s:'Energia convettiva estrema — fenomeni violenti se innescati',        c:'#EF4444',bg:'#0C0000'},
+];
+
+// 💧 RISCHIO CONVERGENZE (score 0-12: Conv.Idx + PWAT + Flusso + SST)
+const CRISK=[
+  {m:4, l:'Nessuna convergenza',    s:'Nessun segnale dinamico convergente attivo',            c:'#22C55E',bg:'#040A04'},
+  {m:8, l:'Convergenza debole',     s:'Segnale convergente presente — monitorare evoluzione',  c:'#818CF8',bg:'#06040F'},
+  {m:11,l:'Convergenza attiva ⚠',  s:'Convergenza in atto — precipitazioni intense probabili', c:'#F97316',bg:'#0C0400'},
+  {m:12,l:'Convergenza critica ⚠⚠',s:'Convergenza critica — alluvione lampo possibile',        c:'#EF4444',bg:'#0C0000'},
+];
+
+// Totale combinato per mappa e scenario (max 21)
+const RL=[
+  {m:6, l:'Rischio basso',      c:'#22C55E',bg:'#040A04'},
+  {m:11,l:'Rischio moderato',   c:'#EAB308',bg:'#0C0900'},
+  {m:15,l:'Rischio elevato',    c:'#F97316',bg:'#0C0400'},
+  {m:24,l:'Rischio estremo',    c:'#EF4444',bg:'#0C0000'},
+];
+
+// ═══════════════════════════════════════════════════
+// API
+// ═══════════════════════════════════════════════════
+const PRI='cape,convective_inhibition,lifted_index,total_column_integrated_water_vapour,wind_speed_850hPa,wind_direction_850hPa,wind_speed_925hPa,wind_direction_925hPa,wind_speed_500hPa,wind_direction_500hPa,geopotential_height_500hPa,temperature_500hPa,temperature_700hPa,relative_humidity_700hPa,temperature_850hPa,relative_humidity_850hPa,surface_pressure';
+const CMP='cape,convective_inhibition,total_column_integrated_water_vapour,temperature_850hPa,wind_speed_850hPa,wind_direction_850hPa';
+
+function aurl(lat,lon,model,p,days=2){
+  const mp=model?`&models=${model}`:'';
+  return `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=${p}${mp}&forecast_days=${days}&timezone=Europe%2FRome`;
+}
+function murl(lat,lon){
+  return `https://marine-api.open-meteo.com/v1/marine?latitude=${lat}&longitude=${lon}&hourly=sea_surface_temperature&forecast_days=2&timezone=Europe%2FRome`;
+}
+async function fj(url){
+  const r=await fetch(url);
+  if(!r.ok){const t=await r.text().catch(()=>'');throw new Error(`HTTP ${r.status} — ${t.slice(0,100)}`);}
+  return r.json();
+}
+
+async function loadAll(){
+  setSt('load','Caricamento dati meteo...');
+  try{
+    // Chiamata primaria senza modello — Open-Meteo usa il miglior dato disponibile per la zona
+    const [ec,d2,eu,at,ma,iso,i2i,ch2]=await Promise.all([
+      fj(aurl(LAT,LON,'',PRI)),
+      fj(aurl(LAT,LON,'icon_d2',CMP)).catch(e=>{console.warn('ICON-D2:',e.message);return null;}),
+      fj(aurl(LAT,LON,'icon_eu',CMP)).catch(e=>{console.warn('ICON-EU:',e.message);return null;}),
+      fj(aurl(LAT_A,LON_A,'','surface_pressure')).catch(e=>{console.warn('AT:',e.message);return null;}),
+      fj(murl(LAT_G,LON_G)).catch(e=>{console.warn('SST:',e.message);return null;}),
+      // Gorizia/Isonzo: vento per calcolo ΔWD convergenza diretta
+      fj(aurl(LAT_ISO,LON_ISO,'','wind_speed_850hPa,wind_direction_850hPa,wind_speed_925hPa,wind_direction_925hPa')).catch(e=>{console.warn('ISO:',e.message);return null;}),
+      // Modelli ad area limitata per l'Italia
+      fj(aurl(LAT,LON,'italia_meteo_arpae_icon_2i',CMP)).catch(e=>{console.warn('ICON-2I:',e.message);return null;}),
+      fj(aurl(LAT,LON,'meteoswiss_icon_ch2',CMP)).catch(e=>{console.warn('CH2:',e.message);return null;}),
+    ]);
+
+      // Confronto ECMWF IFS025 (secondario, non blocca)
+    const ecC=await fj(aurl(LAT,LON,'ecmwf_ifs025',CMP)).catch(e=>{console.warn('ECMWF025:',e.message);return null;});
+
+    const tm=ec.hourly.time;
+    const now=new Date();
+    const pad=n=>String(n).padStart(2,'0');
+    const ns=`${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:00`;
+    H0=tm.indexOf(ns); if(H0<0)H0=0;
+
+    const sl=(a,s=H0)=>a?a.slice(s,s+48):Array(48).fill(null);
+    const h=ec.hourly;
+
+    D={
+      times:sl(tm),
+      cape:sl(h.cape), cin:sl(h.convective_inhibition),
+      li:sl(h.lifted_index),
+      pwat:sl(h.total_column_integrated_water_vapour),
+      ws850:sl(h.wind_speed_850hPa), wd850:sl(h.wind_direction_850hPa),
+      ws925:sl(h.wind_speed_925hPa), wd925:sl(h.wind_direction_925hPa),
+      ws500:sl(h.wind_speed_500hPa), wd500:sl(h.wind_direction_500hPa),
+      z500:sl(h.geopotential_height_500hPa),
+      t850:sl(h.temperature_850hPa), rh850:sl(h.relative_humidity_850hPa),
+      t700:sl(h.temperature_700hPa), rh700:sl(h.relative_humidity_700hPa),
+      t500:sl(h.temperature_500hPa),
+      mslp:sl(h.surface_pressure),
+      mslp_a:sl(at?.hourly?.surface_pressure),
+      sst:sl(ma?.hourly?.sea_surface_temperature),
+      // Gorizia/Isonzo — punto orientale per ΔWD convergenza diretta
+      iso_ws850:sl(iso?.hourly?.wind_speed_850hPa),
+      iso_wd850:sl(iso?.hourly?.wind_direction_850hPa),
+      iso_ws925:sl(iso?.hourly?.wind_speed_925hPa),
+      iso_wd925:sl(iso?.hourly?.wind_direction_925hPa),
+      // Modelli confronto
+      ec:ecC?{cape:sl(ecC.hourly.cape),pwat:sl(ecC.hourly.total_column_integrated_water_vapour),t850:sl(ecC.hourly.temperature_850hPa)}:null,
+      d2:d2?{cape:sl(d2.hourly.cape),pwat:sl(d2.hourly.total_column_integrated_water_vapour),t850:sl(d2.hourly.temperature_850hPa),cin:sl(d2.hourly.convective_inhibition),ws850:sl(d2.hourly.wind_speed_850hPa),wd850:sl(d2.hourly.wind_direction_850hPa)}:null,
+      eu:eu?{cape:sl(eu.hourly.cape),pwat:sl(eu.hourly.total_column_integrated_water_vapour),t850:sl(eu.hourly.temperature_850hPa)}:null,
+      i2i:i2i?{cape:sl(i2i.hourly.cape),pwat:sl(i2i.hourly.total_column_integrated_water_vapour),t850:sl(i2i.hourly.temperature_850hPa)}:null,
+      ch2:ch2?{cape:sl(ch2.hourly.cape),pwat:sl(ch2.hourly.total_column_integrated_water_vapour),t850:sl(ch2.hourly.temperature_850hPa)}:null,
+    };
+
+    document.getElementById('tl0').textContent=ftl(D.times[0]);
+    document.getElementById('tl47').textContent=ftl(D.times[47]);
+    document.getElementById('tlm').textContent=ftl(D.times[24]);
+
+    const mods=[d2?'ICON-D2':'',i2i?'ICON-2I':'',ch2?'MeteoSwiss CH2':''].filter(Boolean).join(' + ');
+    setSt('ok',`Open-Meteo${mods?' + '+mods:''}`);
+    document.getElementById('srun').textContent=`aggiorn. ${ftl(D.times[0])}`;
+    upd(0);
+  }catch(e){
+    console.error('loadAll:',e);
+    setSt('err',`Errore: ${e.message?.slice(0,50)||'vedi console'}`);
+    document.getElementById('mcomp').innerHTML=`<div style="font-size:11px;color:#EF4444;padding:10px;text-align:center">
+      Errore caricamento dati.<br>
+      <span style="color:#64748B;font-size:10px">${e.message?.slice(0,100)||''}</span><br><br>
+      <span style="color:#475569;font-size:10px">Verificare la console del browser per i dettagli (F12 → Console)</span>
+    </div>`;
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// CALCULATIONS
+// ═══════════════════════════════════════════════════
+function shear(ws8,wd8,ws5,wd5){
+  if(ws8==null||ws5==null) return null;
+  const r=Math.PI/180;
+  const u8=-ws8*Math.sin(wd8*r), v8=-ws8*Math.cos(wd8*r);
+  const u5=-ws5*Math.sin(wd5*r), v5=-ws5*Math.cos(wd5*r);
+  return Math.sqrt((u5-u8)**2+(v5-v8)**2)*3.6;
+}
+
+// ═══════════════════════════════════════════════════
+// CALIBRAZIONE STAGIONALE — soglie adattate al clima
+// estivo/autunnale/primaverile/invernale del FVG
+// ═══════════════════════════════════════════════════
+const SEASONAL={
+  // Giugno–Agosto: valori di fondo già alti (SST, PWAT, CIN basso)
+  // → soglie più elevate per evidenziare solo le vere anomalie
+  estate:{
+    nome:'Estate',
+    cape: [500,1200,2400],   // J/kg — abbassato: 500 sufficiente per celle orografiche (Prossenicco 26/06/2026: CAPE=780, temporale reale)
+    pwat: [32,44,54],        // mm
+    sst:  [24.5,26.5,28.5],  // °C
+    cin_cape_min:700,        // CIN bassa vale solo con CAPE davvero significativa (estate: baseline CIN bassa è normale)
+    dir_ws_min:7,            // m/s min per score pieno sulla direzione (alto in estate: SSW sotto anticiclone è comune)
+    conv_pwat_thr:44,        // soglia PWAT per bonus convergenza
+  },
+  // Settembre–Novembre: transizione, eventi ancora possibili
+  autunno:{
+    nome:'Autunno',
+    cape: [400,1300,2600],
+    pwat: [26,38,48],
+    sst:  [21.5,24.0,26.5],
+    cin_cape_min:150,
+    dir_ws_min:3,
+    conv_pwat_thr:38,
+  },
+  // Marzo–Maggio: bassa baseline, ogni segnale è significativo
+  primavera:{
+    nome:'Primavera',
+    cape: [250,1000,2000],
+    pwat: [18,28,38],
+    sst:  [15,18,21],
+    cin_cape_min:80,
+    dir_ws_min:2,
+    conv_pwat_thr:28,
+  },
+  // Dicembre–Febbraio: convezione rara, soglie molto basse
+  inverno:{
+    nome:'Inverno',
+    cape: [80, 400,1200],
+    pwat: [12, 20, 28],
+    sst:  [12, 15, 18],
+    cin_cape_min:0,
+    dir_ws_min:1,
+    conv_pwat_thr:20,
+  },
+};
+
+function getSeason(timeStr){
+  const m=new Date(timeStr||Date.now()).getMonth()+1;
+  if(m>=6&&m<=8)  return SEASONAL.estate;
+  if(m>=9&&m<=11) return SEASONAL.autunno;
+  if(m>=3&&m<=5)  return SEASONAL.primavera;
+  return SEASONAL.inverno;
+}
+
+// Scoring functions con soglie stagionali
+function capeScore(v,th){
+  const s=v==null?0:v<th[0]?0:v<th[1]?1:v<th[2]?2:3;
+  return {s,c:['#38BDF8','#818CF8','#F97316','#EF4444'][s],v:Math.round(v??0)};
+}
+
+function pwatScore(v,th){
+  const s=v==null?0:v<th[0]?0:v<th[1]?1:v<th[2]?2:3;
+  return {s,c:['#38BDF8','#818CF8','#F97316','#EF4444'][s],v:v!=null?Math.round(v):null};
+}
+
+function sstScore(v,th){
+  if(v==null) return {s:0,c:'#475569',lab:'SST N/D'};
+  const s=v<th[0]?0:v<th[1]?1:v<th[2]?2:3;
+  const lbs=['bassa','moderata','elevata — evapor. attiva','eccezionale'];
+  return {s,c:['#38BDF8','#818CF8','#F97316','#EF4444'][s],lab:`${v.toFixed(1)}°C · SST ${lbs[s]}`};
+}
+
+function cinScore(v,cape_v,cape_min){
+  const a=Math.abs(v||0);
+  let s=a>200?0:a>100?1:a>25?2:3;
+  // In estate CIN bassa è normale: score elevato solo se anche CAPE è significativa
+  if(s>=2&&(cape_v??0)<cape_min) s=1;
+  const c=['#38BDF8','#818CF8','#F97316','#EF4444'][s];
+  const lab=a>200?'Forte inibizione':a>100?'Inibizione moderata':a>25?'Inibizione debole':'Innesco libero ⚠';
+  return {s,c,lab,raw:a};
+}
+
+function dirScoreSeas(wd,ws,ws_min){
+  if(wd==null) return {s:0,id:'ND',c:'#475569',lab:'Dato mancante'};
+  let r;
+  if(wd>=315||wd<45)  r={s:0,id:'NE',c:'#64748B',lab:'N/NE · Bora/Tramontana'};
+  else if(wd>=225)    r={s:1,id:'NW',c:'#38BDF8',lab:'W/NW · Maestrale'};
+  else if(wd>=190)    r={s:2,id:'SW',c:'#818CF8',lab:'S/SW · Libeccio'};
+  else if(wd>=130)    r={s:3,id:'SE',c:'#A855F7',lab:'SE/S · Scirocco → Jalmicco ⚠'};
+  else if(wd>=70)     r={s:3,id:'E', c:'#A855F7',lab:'E/ESE · Levante → Jalmicco ⚠'};
+  else                r={s:1,id:'NE',c:'#38BDF8',lab:'ENE'};
+  // Vento troppo debole per trasporto umidità significativo → riduce score
+  if(r.s>=2&&(ws??0)<ws_min) r={...r,s:Math.max(r.s-1,1)};
+  return r;
+}
+
+function shearScore(v){
+  if(v==null) return {s:0,c:'#38BDF8',lab:'N/D'};
+  if(v<18)  return {s:0,c:'#38BDF8',lab:`${Math.round(v)} km/h · celle stazionarie`};
+  if(v<35)  return {s:1,c:'#818CF8',lab:`${Math.round(v)} km/h · shear debole`};
+  if(v<65)  return {s:2,c:'#F97316',lab:`${Math.round(v)} km/h · MCS organizzato`};
+  if(v<100) return {s:3,c:'#EF4444',lab:`${Math.round(v)} km/h · supercelle possibili`};
+  return     {s:2,c:'#F97316',lab:`${Math.round(v)} km/h · storm veloci`};
+}
+
+// Convergenza diretta ΔWD — differenza di direzione Udine vs Gorizia/Isonzo
+// Calibrato sull'evento Versa 16-17/11/2025 e nucleo temporalesco Attimis 25-26/06/2026
+// Quando Udine ha flusso S/SW e Gorizia ha SE → zona di convergenza sul corridoio
+// Cormòns-Cividale-Attimis (fascia centro-orientale FVG, il bersaglio del modello)
+// Misura DIRETTA rispetto all'algoritmo di backing su singolo punto
+function dWDconv(wd_udi,ws_udi,wd_iso,ws_iso){
+  if(wd_udi==null||wd_iso==null) return 0;
+  if(ws_udi==null||ws_iso==null||ws_udi<3||ws_iso<3) return 0;
+  // df > 0: Udine più orario (S/SW) di Gorizia (SE) → convergenza tra le due stazioni
+  let df=wd_udi-wd_iso;
+  while(df>180) df-=360; while(df<-180) df+=360;
+  if(df<22) return 0;
+  if(df>=45&&ws_udi>=6&&ws_iso>=6) return 3; // forte convergenza
+  if(df>=30&&(ws_udi>=4||ws_iso>=4))   return 2; // moderata
+  return 1;                                        // debole
+}
+
+
+function convIdxSeas(wd8,ws8,wd9,pwat,pwat_thr,z500_m){
+  if(wd8==null||wd9==null) return 0;
+
+  // Sotto anticiclone robusto la subsidenza sopprime la convergenza
+  // Soglie abbassate: estate FVG alta pressione tipica ~5820-5860m
+  if(z500_m!=null&&z500_m>5820) return 0;  // anticiclone moderato-forte → ci = 0
+
+  let df=wd9-wd8;
+  while(df>180) df-=360; while(df<-180) df+=360;
+  const se=wd8>=120&&wd8<=225, e=wd8>=70&&wd8<130;
+
+  // Soglie più severe per evitare falsi positivi da circolazione termica estiva
+  let s=0;
+  if((se||e)&&ws8>6)              s=1;
+  if(df<-16&&s>0&&ws8>6)          s=2;
+  if(df<-28&&(se||e)&&ws8>10)     s=3;
+  if((pwat??0)>pwat_thr&&s>0) s=Math.min(3,s+1);
+
+  // Sotto anticiclone moderato (5780-5820m), cap a 1
+  if(z500_m!=null&&z500_m>5780) s=Math.min(s,1);
+
+  return Math.min(3,s);
+}
+
+// ─── Lifted Index ────────────────────────────────
+function liScore(v){
+  if(v==null) return {s:0,c:'#38BDF8',v:null,lab:'N/D'};
+  const s=v>0?0:v>-3?0:v>-6?1:v>-9?2:3;
+  return {s,c:['#38BDF8','#818CF8','#F97316','#EF4444'][s],v:v.toFixed(1),
+    lab:v>0?'Stabile':v>-3?'Marginale':v>-6?'Moderato':v>-9?'Forte':'Esplosivo'};
+}
+
+function params(i){
+  if(!D) return null;
+  const seas=getSeason(D.times[i]);
+  const cape=capeScore(D.cape[i],seas.cape);
+  const pwat=pwatScore(D.pwat[i],seas.pwat);
+  const sh=shear(D.ws850[i],D.wd850[i],D.ws500[i],D.wd500[i]);
+  const shr=shearScore(sh);
+  const cin=cinScore(D.cin[i],D.cape[i],seas.cin_cape_min);
+  const li=liScore(D.li[i]);
+  const ki_raw=kIndex(D.t850[i],D.t700[i],D.t500[i],D.rh850[i],D.rh700[i]);
+  const ki=kiScore(ki_raw);
+  const dir=dirScoreSeas(D.wd850[i],D.ws850[i],seas.dir_ws_min);
+  const ci_back=convIdxSeas(D.wd850[i],D.ws850[i],D.wd925[i],D.pwat[i],seas.conv_pwat_thr,D.z500[i]);
+  const ci_dwd=dWDconv(D.wd850[i],D.ws850[i],D.iso_wd850?.[i],D.iso_ws850?.[i]);
+  // Combina i due segnali, poi applica soppressione Z500 al risultato finale
+  // Così ci_dwd non bypassa la soppressione anticiclonica
+  const ci_raw=Math.min(3,Math.max(ci_back,ci_dwd));
+  const z5m=D.z500[i];
+  const ci=z5m!=null&&z5m>5820?0:z5m!=null&&z5m>5780?Math.min(ci_raw,1):ci_raw;
+  const ss=sstScore(D.sst[i],seas.sst);
+  const ciC=['#38BDF8','#818CF8','#F97316','#EF4444'][ci];
+  const ciL=['Assente','Debole','Moderato ⚠','Forte ⚠⚠'][ci];
+  // REGOLA FONDAMENTALE: la convergenza esiste solo con segnale dinamico reale (ci > 0)
+  // PWAT, SST e direzione AMPLIFICANO un segnale esistente, non ne creano uno dal nulla
+  // Con ci=0 (alta pressione estiva, no forzante dinamico) → cs=0 sempre
+  const cs_raw=ci+pwat.s+dir.s+ss.s;
+  const cs=ci===0?0:cs_raw;
+  const ts_raw=cape.s+cin.s+shr.s+li.s; // max 12
+  // Con K Index ≥ 28 l'instabilità reale è presente: le penalità Z500 e ombra
+  // pluviometrica non devono sopprimere ts (calibrato su Prossenicco 26/06/2026:
+  // KI=35.6, CAPE=780, temporale orografico reale non visto dal modello)
+  const kiSuppressed=(ki.v??0)>=28;
+  const z5dam=D.z500[i]!=null?Math.round(D.z500[i]/10):null;
+  const ts_z=kiSuppressed?ts_raw:
+             z5dam!=null&&z5dam>582?Math.max(0,ts_raw-2):
+             z5dam!=null&&z5dam>576?Math.max(0,ts_raw-1):ts_raw;
+  const wd5v=D.wd500[i]??270;
+  const northFlow=(wd5v>=320||wd5v<60);
+  const rainShadow=!kiSuppressed&&northFlow&&z5dam!=null&&z5dam>576&&z5dam<588;
+  const ts=rainShadow?Math.max(0,ts_z-1):ts_z;
+  return {
+    cape,pwat,shr,cin,li,ki,dir,sst:ss,
+    ci:{s:ci,c:ciC,lab:ciL},
+    wd850:D.wd850[i],ws850:D.ws850[i],
+    ws925:D.ws925[i],                          // per calcolo LLJ notturno
+    hour:D.times[i]?new Date(D.times[i]).getHours():null,  // ora locale per trigger termico/notturno
+    dp:D.mslp[i]!=null&&D.mslp_a[i]!=null?(D.mslp[i]-D.mslp_a[i])/100:null,
+    z500:D.z500[i]!=null?Math.round(D.z500[i]/10):null,
+    t850:D.t850[i],rh850:D.rh850[i],
+    wd500:D.wd500[i],
+    shr_kmh:sh,
+    stagione:seas.nome,
+    ts, cs,
+    total:ts+cs
+  };
+}
+
+// K Index — indice di instabilità condizionata con umidità
+// KI = (T850-T500) + Td850 - (T700-Td700)
+// Calibrato sull'evento Rivolto 00UTC 26/06/2026: KI=32.7, CAPE=275, CIN=193
+// Cattura la convezione innescata localmente anche con LI>0 e CIN alta
+function kIndex(t850,t700,t500,rh850,rh700){
+  if(t850==null||t700==null||t500==null||rh850==null||rh700==null) return null;
+  const Td850=t850-(100-Math.max(0,rh850))/5; // dewpoint approssimato
+  const Td700=t700-(100-Math.max(0,rh700))/5;
+  return (t850-t500)+Td850-(t700-Td700);
+}
+function kiScore(v){
+  if(v==null) return {s:0,v:null,c:'#38BDF8',lab:'N/D'};
+  // Soglie validate su radiosondaggi FVG:
+  // <20: stabile, 20-30: isolati possibili, 30-35: sparsi, ≥35: diffusi
+  const s=v>=35?3:v>=30?2:v>=20?1:0;
+  return {s,v:Math.round(v*10)/10,c:['#38BDF8','#EAB308','#F97316','#EF4444'][s],
+    lab:v>=35?'Temporali diffusi':v>=30?'Temporali sparsi':v>=20?'Temporali isolati':'Stabile'};
+}
+
+
+// ═══════════════════════════════════════════════════
+// CLASSIFICATORE TIPO DI INNESCO TEMPORALESCO
+// Priorità: dal più pericoloso al più comune
+// Calibrato su: Versa 11/2025, Attimis+Monfalcone 06/2026
+// ═══════════════════════════════════════════════════
+function detectTrigger(p){
+  if(!p||p.ts<3) return null;
+  const h=p.hour, wd5=p.wd500??270;
+  const isNight     =h!=null&&(h>=21||h<6);
+  const isAfternoon =h!=null&&h>=13&&h<20;
+  const llj=p.ws925!=null&&p.ws850!=null&&(p.ws925-p.ws850)>2;
+
+  // 0 — TRANSIZIONE BORA→BREZZA SU CALDO ESTREMO (priorità assoluta)
+  // T850 > 20°C + ΔP in transizione (−1 / +3 hPa) + SST calda + pomeriggio/sera
+  // Il più pericoloso per il FVG carsico: calore estremo accumulato + ingresso brezza adriatica
+  // → celle esplosive 60+ dBZ sul bordo carsico in pochi minuti
+  // Evento calibrazione: Monfalcone-Doberdò 27/06/2026 (37-39°C, T850=22.1°C, ΔP=+0.4)
+  const isAfternoonEvening=h!=null&&h>=13&&h<22;
+  if(p.t850!=null&&p.t850>20&&p.dp!=null&&p.dp>=-1&&p.dp<=3&&p.sst.s>=2&&isAfternoonEvening)
+    return{tipo:'Transizione Bora→Brezza / Caldo estremo',icon:'🌡️',col:'#DC2626',
+      desc:`T850=${p.t850.toFixed(1)}°C eccezionale. Bora in cessazione, brezza adriatica invade Carso surriscaldato.`,
+      rischio:'Celle esplosive 60+ dBZ — flash flood e grandine localizzati'};
+    return{tipo:'Back-building (autorigenerante)',icon:'💧',col:'#F97316',
+      desc:'Scirocco SE + celle stazionarie + cold pool. Rigenera sullo stesso asse per ore.',
+      rischio:'Flash flood — accumuli estremi localizzati'};
+
+  // 2 — FRONTALE ORGANIZZATO
+  if(p.shr.s>=2&&wd5>=210&&wd5<=310&&p.dp!=null&&p.dp<-1&&p.ts>=4)
+    return{tipo:'Frontale organizzato',icon:'🌧',col:'#60A5FA',
+      desc:'Sistema frontale con shear favorevole. Temporali diffusi e organizzati.',
+      rischio:'Grandine, raffiche forti, accumuli diffusi'};
+
+  // 3 — POST-FRONTALE
+  if((p.dir.id==='NW'||p.dir.id==='W')&&p.t850!=null&&p.t850<9&&p.cape.v>=200&&p.shr.s>=1)
+    return{tipo:'Post-frontale',icon:'❄️',col:'#38BDF8',
+      desc:'Aria fredda in quota su superficie calda. Celle brevi ma esplosive.',
+      rischio:'Grandine probabile, raffiche improvvise'};
+
+  // 4 — NOTTURNO / LLJ
+  // Evento: Attimis+Monfalcone 25-26/06/2026 00:00 (25-30mm/h, KI=32.7, CIN=193)
+  if(isNight&&llj&&p.ki.s>=1&&p.cape.v>=80)
+    return{tipo:'Notturno — LLJ',icon:'🌙',col:'#818CF8',
+      desc:'Jet a basso livello dopo tramonto + instabilità residua. Innesco imprevisto pedemontana/Carso.',
+      rischio:'Nubifragi localizzati — bassa prevedibilità'};
+
+  // 5 — OROGRAFICO
+  if((wd5>=320||wd5<80)&&p.shr.s<=1&&p.ki.s>=1&&p.ts>=3)
+    return{tipo:'Orografico',icon:'⛰️',col:'#A78BFA',
+      desc:'Flusso da N/NE → sollevamento forzato prealpi → celle isolate Gemona-Cividale-Attimis.',
+      rischio:'Nubifragi localizzati su pedemontana orientale'};
+
+  // 6 — TERMICO POMERIDIANO
+  if(isAfternoon&&p.shr.s===0&&p.cape.s>=1&&p.cin.s>=2)
+    return{tipo:'Termico pomeridiano',icon:'☀️',col:'#FBBF24',
+      desc:'Convezione da riscaldamento superficiale pianura. Celle isolate, dissipano dopo il tramonto.',
+      rischio:'Rovesci brevi, grandine piccola possibile'};
+
+  // 7 — BREZZA LAGUNARE/CARSICA
+  // SST molto calda è il driver principale — la brezza è un fenomeno di basso strato
+  // non rilevabile dalla direzione a 850 hPa (geostrofico, diverso dalla brezza)
+  const brezza=p.sst.s>=2||(p.sst.s>=1&&(p.dir.id==='SE'||p.dir.id==='S'||p.dir.id==='SW'));
+  if(brezza&&p.shr.s<=2&&p.ts>=3)
+    return{tipo:'Brezza lagunare/carsica',icon:'🌊',col:'#10B981',
+      desc:'Celle stazionarie da brezza adriatica sul bordo del Carso. SST='+((p.sst?.v??'--'))+'°C.',
+      rischio:'Celle isolate stazionarie — nubifragio puntale'};
+
+  return{tipo:'Innesco non determinato',icon:'⚡',col:'#64748B',
+    desc:'Condizioni convettive presenti — meccanismo principale non classificabile.',
+    rischio:'Monitorare evoluzione'};
+}
+
+
+// Probabilità stimata temporali (0-95%)
+function tPercent(ts,cin_s){
+  if(ts<1) return 0;
+  const base=Math.pow(ts/12,1.5)*100;
+  // CIN alta (cin_s basso) riduce la probabilità anche con CAPE presente
+  const cinF=[0.5,0.8,1.0,1.2][Math.min(cin_s,3)];
+  return Math.min(95,Math.max(0,Math.round(base*cinF)));
+}
+
+
+function scenario(p){
+  if(!p) return {t:'N/D',c:'#475569',d:'',acc:'--'};
+  const {ts,cs,shr_kmh,li,cape}=p;
+  const hiCAPE=cape.v>=1800, lowShear=(shr_kmh??0)<18, orgShear=(shr_kmh??0)>=18&&(shr_kmh??0)<=65;
+  const liForte=li&&li.s>=2;
+
+  // ── Scenari combinati ──────────────────────────
+  if(ts>=9&&cs>=9)
+    return{t:'Flash Flood Convettivo + Convergenza ⚠',c:'#EF4444',
+      d:'Instabilità estrema su asse convergente — alluvione lampo probabile fascia Palmanova-Cormons',
+      acc:'> 100 mm / 3h'};
+
+  // ── Convergenza LAGUNARE — asse SW-NE Marano→Palmanova→Cividale/Cormons ──
+  const isLagFlow=p.dir&&(p.dir.id==='SE'||p.dir.id==='S'||p.dir.id==='SW');
+  if(cs>=7&&isLagFlow&&p.sst.s>=1&&p.ci.s>=1)
+    return{t:'Convergenza Lagunare — asse Marano→Palmanova→Cormons/Cividale',c:'#F59E0B',
+      d:'Brezza lagunare calda (lagune Grado/Marano) converge con aria prealpina lungo il corridoio Torre-Isonzo-Judrio. Accumuli estremi su fascia ristretta SW-NE.',
+      acc:'30–120 mm / 3-12h'};
+
+  if(cs>=5&&isLagFlow&&p.sst.s>=1)
+    return{t:'Brezza Lagunare attiva — convergenza debole',c:'#EAB308',
+      d:'Flusso lagunare dal mare verso le Prealpi. Condizioni favorevoli a sviluppo di celle isolate lungo l\'asse Palmanova-Cividale-Cormons.',
+      acc:'10–40 mm / 3-6h'};
+
+  // ── Convergenze (senza temporali forti) ───────
+  if(cs>=9&&ts<=4)
+    return{t:'Convergenza Stazionaria — senza temporali',c:'#F97316',
+      d:'Convergenza attiva senza convezione profonda — piogge stratiformi intense e durature, scarsa attività elettrica',
+      acc:'50–150 mm / 12-24h'};
+  if(cs>=7&&ts<=5)
+    return{t:'Convergenza attiva — temporali marginali',c:'#818CF8',
+      d:'Convergenza dominante con poca instabilità — precipitazioni intense soprattutto stratiformi',
+      acc:'30–80 mm / 6-12h'};
+
+  // ── Transizione Bora→Brezza su CALDO ESTREMO — massima pericolosità ──
+  // T850 > 20°C + ΔP in transizione + SST calda → celle esplosive sul bordo carsico
+  // Evento calibrazione: Monfalcone-Doberdò 27/06/2026
+  if(p.t850!=null&&p.t850>20&&p.dp!=null&&p.dp>=-1&&p.dp<=3&&p.sst.s>=2&&ts>=3)
+    return{t:'Transizione Bora→Brezza — caldo estremo ⚠',c:'#DC2626',
+      d:`T850=${p.t850.toFixed(1)}°C eccezionale. Cessazione Bora + brezza adriatica su Carso surriscaldato → celle esplosive 60+ dBZ. Flash flood e grandine localizzati su Carso/Monfalconese.`,
+      acc:'10–60 mm / 30-60 min'};
+
+  // ── Brezza lagunare/carsica standard ──
+  // SST alta + shear basso (<=1, max 35km/h) + no convergenza organizzata
+  // Shear "debole" (18-35 km/h) non organizza MCS, mantiene celle stazionarie
+  const bressaCarso=p.sst&&p.sst.s>=2&&p.shr.s<=2&&p.ci.s===0;
+  if(bressaCarso&&ts>=4)
+    return{t:'Celle isolate — brezza lagunare/carsica',c:'#10B981',
+      d:'Convezione termica carsica + brezza adriatica (SST elevata). Celle stazionarie Carso-Monfalcone. Non si estende alla pianura.',
+      acc:'5–30 mm / 1-2h'};
+
+  // ── Temporali ─────────────────────────────────
+  if(ts>=9&&lowShear&&(hiCAPE||liForte))
+    return{t:'Temporali isolati esplosivi',c:'#EF4444',
+      d:'Celle solitarie a sviluppo verticale estremo — CAPE alta, bassa organizzazione: nubifragi puntali da 50-80 mm/h',
+      acc:'40–100 mm / 1-2h'};
+  if(ts>=7&&orgShear)
+    return{t:'Temporali forti e diffusi',c:'#F97316',
+      d:'MCS organizzato con shear buono — temporali forti e diffusi, accumuli significativi su più comuni',
+      acc:'20–60 mm / 3h'};
+  if(ts>=6&&lowShear&&hiCAPE)
+    return{t:'Temporali isolati intensi',c:'#EAB308',
+      d:'Celle isolate con elevata CAPE — potenzialmente forti ma localizzate; movimenti lenti aumentano accumuli',
+      acc:'15–40 mm / 1-2h'};
+  if(ts>=4)
+    return{t:'Temporali isolati deboli/moderati',c:'#38BDF8',
+      d:'Convezione marginale — temporali brevi e sparsi, accumuli limitati, scarsa attività elettrica',
+      acc:'5–20 mm / 3h'};
+
+  // ── Convergenza debole ─────────────────────────
+  if(cs>=5)
+    return{t:'Convergenza debole — piogge moderate',c:'#818CF8',
+      d:'Segnale convergente presente con umidità sufficiente — piogge moderate prolungate senza forte convezione',
+      acc:'10–35 mm / 6-12h'};
+
+  return{t:'Rischio basso / Assente',c:'#22C55E',
+    d:'Parametri non favorevoli a precipitazioni significative sull\'area.',
+    acc:'< 5 mm / 3h'};
+}
+
+// ═══════════════════════════════════════════════════
+// UPDATE UI
+// ═══════════════════════════════════════════════════
+function upd(idx){
+  if(!D) return;
+  const p=params(idx);
+  const risk=RL.find(r=>p.total<=r.m)||RL[3];
+  const sc=scenario(p);
+
+  // Time labels
+  const tstr=D.times[idx]||'';
+  const dt=new Date(tstr);
+  const pad=n=>String(n).padStart(2,'0');
+  document.getElementById('tlabel').textContent=`${pad(dt.getHours())}:00`;
+  const days=['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
+  const now=new Date();
+  const isT=dt.getDate()===now.getDate();
+  const isD=dt.getDate()===now.getDate()+1;
+  document.getElementById('tdate').textContent=`${isT?'Oggi':isD?'Domani':days[dt.getDay()]} ${dt.getDate()}/${dt.getMonth()+1} — ${tstr.slice(0,10)}`;
+
+  // ⚡ Pannello Temporali (0-9)
+  const tRisk=RT.find(r=>p.ts<=r.m)||RT[3];
+  const tc=document.getElementById('tCard');
+  if(tc){tc.style.background=tRisk.bg;tc.style.borderColor=`${tRisk.c}40`;}
+  const tSc=document.getElementById('tScore');
+  if(tSc){tSc.textContent=p.ts;tSc.style.color=tRisk.c;}
+  const tBr=document.getElementById('tBar');
+  if(tBr) tBr.style.width=`${p.ts/12*100}%`;
+  // Probabilità %
+  const tPct=tPercent(p.ts,p.cin.s);
+  const tPrEl=document.getElementById('tProb');
+  if(tPrEl){
+    tPrEl.textContent=`~${tPct}%`;
+    tPrEl.style.color=tPct>=60?'#EF4444':tPct>=35?'#F97316':tPct>=15?'#EAB308':'#38BDF8';
+  }
+  const tLb=document.getElementById('tLabel');
+  if(tLb){tLb.textContent=tRisk.l;tLb.style.color=tRisk.c;}
+
+  // 💧 Pannello Convergenze (0-12)
+  const cRisk=CRISK.find(r=>p.cs<=r.m)||CRISK[3];
+  const cc=document.getElementById('cCard');
+  if(cc){cc.style.background=cRisk.bg;cc.style.borderColor=`${cRisk.c}40`;}
+  const cSc=document.getElementById('cScore');
+  if(cSc){cSc.textContent=p.cs;cSc.style.color=cRisk.c;}
+  const cBr=document.getElementById('cBar');
+  if(cBr) cBr.style.width=`${p.cs/12*100}%`;
+  const cLb=document.getElementById('cLabel');
+  if(cLb){cLb.textContent=cRisk.l;cLb.style.color=cRisk.c;}
+
+  // Scenario card (usa rischio dominante per il bordo)
+  const domRisk=p.ts/12>=p.cs/12?tRisk:cRisk;
+  const rc=document.getElementById('rcard');
+  if(rc) rc.style.borderColor=`${domRisk.c}40`;
+  const selEl=document.getElementById('seasLabel');
+  if(selEl) selEl.textContent=`Calibrazione: ${p.stagione} FVG`;
+  document.getElementById('stype').textContent=sc.t;
+  document.getElementById('stype').style.color=sc.c;
+  document.getElementById('sdesc').textContent=sc.d;
+  document.getElementById('accum').textContent=sc.acc;
+  document.getElementById('accum').style.color=domRisk.c;
+
+  // Badge tipo di innesco
+  const trig=detectTrigger(p);
+  const tb=document.getElementById('triggerBadge');
+  if(tb){
+    if(trig){
+      tb.style.display='flex';
+      tb.style.borderLeftColor=trig.col;
+      document.getElementById('triggerIcon').textContent=trig.icon;
+      document.getElementById('triggerTipo').textContent=trig.tipo;
+      document.getElementById('triggerTipo').style.color=trig.col;
+      document.getElementById('triggerDesc').textContent=trig.desc;
+      document.getElementById('triggerRisk').textContent=trig.rischio;
+    } else {
+      tb.style.display='none';
+    }
+  }
+
+  // Map overlay — mostra il rischio più alto tra i due
+  const rov=document.getElementById('riskOv');
+  if(rov){
+    const domL=p.ts/12>=p.cs/12?`⚡ ${tRisk.l}`:`💧 ${cRisk.l}`;
+    rov.textContent=domL;
+    rov.style.color=domRisk.c;
+  }
+
+  // Map update
+  updMap(p,risk);
+
+  // SST on map
+  if(D.sst[idx]!=null){
+    document.getElementById('sstDisp').textContent=D.sst[idx].toFixed(1);
+  }
+  // Wind direction label
+  if(D.wd850&&D.wd850[idx]!=null&&D.ws850&&D.ws850[idx]!=null){
+    const dirs=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSO','SO','OSO','O','ONO','NO','NNO'];
+    const di=Math.round(D.wd850[idx]/22.5)%16;
+    document.getElementById('windDisp').textContent=`${dirs[di]} ${Math.round(D.ws850[idx])} kt`;
+  }
+
+  // Params grid
+  const plist=[
+    {step:1, lab:'CAPE',               val:`${p.cape.v} J/kg`,                              s:p.cape.s, c:p.cape.c},
+    {step:2, lab:'LI (Lifted Index)',   val:`${p.li.v??'N/D'} · ${p.li.lab}`,               s:p.li.s,   c:p.li.c},
+    {step:3, lab:'K Index',             val:`${p.ki.v??'N/D'} · ${p.ki.lab}`,               s:p.ki.s,   c:p.ki.c},
+    {step:4, lab:'PWAT',               val:`${p.pwat.v??'N/D'} mm`,                         s:p.pwat.s, c:p.pwat.c},
+    {step:5, lab:'Shear 0–6km',        val:p.shr.lab,                                       s:p.shr.s,  c:p.shr.c},
+    {step:6, lab:'CIN',                val:`−${p.cin.raw} J/kg · ${p.cin.lab}`,             s:p.cin.s,  c:p.cin.c},
+    {step:7, lab:'Flusso 850hPa',      val:p.dir.lab,                                       s:p.dir.s,  c:p.dir.c},
+    {step:8, lab:'Ind. Convergenza',   val:p.ci.lab,                                        s:p.ci.s,   c:p.ci.c},
+    {step:9, lab:'SST Grado/Adriatico',val:p.sst.lab,                                       s:p.sst.s,  c:p.sst.c},
+    // Diagnostici — non contribuiscono allo scoring ma fondamentali per interpretazione
+    {step:10,lab:'T 850 hPa',
+      val:p.t850!=null?`${p.t850.toFixed(1)}°C`:'N/D',
+      s:p.t850!=null?(p.t850>20?3:p.t850>15?2:p.t850>8?1:0):0,
+      c:p.t850!=null?(p.t850>20?'#EF4444':p.t850>15?'#F97316':p.t850>8?'#EAB308':'#38BDF8'):'#475569'},
+    {step:11,lab:'ΔP Udine–Carinzia',
+      val:p.dp!=null?`${p.dp.toFixed(1)} hPa ${p.dp<-2?'· Bora attiva':p.dp>2?'· Flusso SW':'· Transizione'}`:'N/D',
+      s:p.dp!=null?(Math.abs(p.dp)>4?2:Math.abs(p.dp)>1?1:0):0,
+      c:p.dp!=null?(p.dp<-2?'#38BDF8':p.dp>2?'#F97316':'#94A3B8'):'#475569'},
+  ];
+  document.getElementById('pgrid').innerHTML=plist.map(pr=>`
+    <div class="pc" style="border-color:${pr.c}22;border-left-color:${pr.c}">
+      <div class="row" style="align-items:center">
+        <div><span class="sb">STEP ${pr.step}</span>
+          <span style="font-weight:600;font-size:11px;color:#CBD5E1;margin-left:6px">${pr.lab}</span></div>
+        <div style="text-align:right;flex-shrink:0;margin-left:8px">
+          <div style="font-size:11px;color:${pr.c};font-weight:600">${pr.val}</div>
+          <div class="bs" style="color:${pr.c};background:${pr.c}18">${pr.s}/3</div>
+        </div>
+      </div>
+    </div>`).join('');
+
+  // Model comparison
+  if(D.d2||D.eu||D.ec){
+    const models=[
+      {n:'Open-Meteo',  cape:D.cape[idx],  pwat:D.pwat[idx],  t850:D.t850[idx],  main:true},
+      D.ec ?{n:'ECMWF IFS',   cape:D.ec.cape[idx],  pwat:D.ec.pwat[idx],  t850:D.ec.t850[idx]}:null,
+      D.i2i?{n:'ICON-2I 🇮🇹', cape:D.i2i.cape[idx], pwat:D.i2i.pwat[idx], t850:D.i2i.t850[idx]}:null,
+      D.d2 ?{n:'ICON-D2 ★',   cape:D.d2.cape[idx],  pwat:D.d2.pwat[idx],  t850:D.d2.t850[idx]}:null,
+      D.eu ?{n:'ICON-EU',     cape:D.eu.cape[idx],  pwat:D.eu.pwat[idx],  t850:D.eu.t850[idx]}:null,
+      D.ch2?{n:'MeteoSwiss CH2',cape:D.ch2.cape[idx],pwat:D.ch2.pwat[idx],t850:D.ch2.t850[idx]}:null,
+    ].filter(Boolean);
+
+    const maxC=Math.max(...models.map(m=>m.cape||0),50);
+
+    // Spread calcolato su tutti i modelli secondari disponibili
+    const secCapes=models.filter(m=>!m.main&&m.cape!=null).map(m=>m.cape);
+    const spread=secCapes.length>1?Math.max(...secCapes)-Math.min(...secCapes):null;
+    const ecCape=D.ec?.cape[idx]??0;
+    const iconMax=Math.max(D.d2?.cape[idx]??0,D.eu?.cape[idx]??0,D.i2i?.cape[idx]??0);
+    const ch2Cape=D.ch2?.cape[idx]??0;
+    // ECMWF tende a sovrastimare CAPE vs ICON che parzialmente risolve la convezione
+    const ecLeads=ecCape>0&&iconMax>=0&&(ecCape-iconMax)>300;
+    // ICON-2I e MeteoSwiss CH2 sono i più affidabili per l'Italia: segnala se sono concordi
+    const italyAgreement=D.i2i&&D.ch2&&
+      Math.abs((D.i2i.cape[idx]??0)-(ch2Cape))<300?'concordi':'discordi';
+    const agr=spread==null?null:spread<200?'alta':spread<500?'moderata':'bassa';
+    const agrC={alta:'#22C55E',moderata:'#EAB308',bassa:'#EF4444'}[agr]||'#475569';
+    const agrLab={alta:'Alta ▲',moderata:'Moderata ►',bassa:'Bassa ▼'}[agr]||'--';
+
+    // Aggiungi nota sulla divergenza ECMWF vs ICON alla probabilità
+    const tPrEl=document.getElementById('tProb');
+    if(tPrEl&&ecLeads){
+      tPrEl.title='ECMWF stima CAPE molto più alto di ICON: probabilità ridotta per incertezza modelli';
+      const tPct=tPercent(p.ts,p.cin.s);
+      const adj=Math.round(tPct*(agr==='bassa'?0.6:0.8));
+      tPrEl.textContent=`~${adj}% ⚠`;
+      tPrEl.style.color='#EAB308';
+    }
+
+    document.getElementById('mcomp').innerHTML=
+      `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div style="font-size:9px;color:#475569">CAPE · PWAT · T850</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          ${agr?`<div style="font-size:9px;font-weight:600;color:${agrC}">Accordo: ${agrLab}</div>`:''}
+          ${D.i2i&&D.ch2?`<div style="font-size:9px;color:${italyAgreement==='concordi'?'#22C55E':'#EAB308'}">IT/CH: ${italyAgreement}</div>`:''}
+        </div>
+      </div>`+
+      models.map(m=>{
+        const pct=m.cape!=null?(m.cape/maxC*100).toFixed(0):0;
+        const bc=m.cape==null?'#1A2535':m.cape>=1500?'#EF4444':m.cape>=500?'#F97316':'#22C55E';
+        const cv=m.cape!=null?Math.round(m.cape):'N/D';
+        const pv=m.pwat!=null?m.pwat.toFixed(0):'--';
+        const tv=m.t850!=null?m.t850.toFixed(1):'--';
+        return `<div class="mr">
+          <div style="font-weight:${m.main?700:400};font-size:10px;color:${m.main?'#06B6D4':'#64748B'};width:68px;flex-shrink:0">${m.n}</div>
+          <div class="mbw"><div class="mb" style="width:${pct}%;background:${bc}"></div></div>
+          <div style="font-size:10px;color:#64748B;text-align:right;flex-shrink:0;min-width:110px">
+            ${cv} J/kg · ${pv}mm · ${tv}°</div>
+        </div>`;
+      }).join('')+
+      (ecLeads?`<div style="font-size:9px;color:#EAB308;margin-top:7px;padding:5px 7px;background:#0C0900;border-radius:5px;border-left:2px solid #EAB308">
+        ⚠ ECMWF stima CAPE ${Math.round(ecCape-iconMax)} J/kg sopra ICON. Possibile sovrastima: ICON-2I 🇮🇹 e MeteoSwiss CH2 a 2km risolvono parzialmente la convezione, consumando il CAPE prima che si accumuli.
+      </div>`:'');
+  }
+
+  // Checklist
+  const checks=[
+    {l:'CAPE > 1500 J/kg?',      ok:p.cape.v>=1500},
+    {l:'PWAT > 38 mm?',          ok:p.pwat.v!=null&&p.pwat.v>=38},
+    {l:'Shear MCS (30–80 km/h)?',ok:p.shr.s===3},
+    {l:'CIN < 100 J/kg?',        ok:p.cin.raw<=100},
+    {l:'Flusso SE/E o SW/S?',     ok:p.dir.s>=2},
+    {l:'Ind. Convergenza ≥ 2?',  ok:p.ci.s>=2},
+    {l:'SST > 24°C?',             ok:p.sst.s>=2},
+  ];
+  let met=0;
+  document.getElementById('cklist').innerHTML=checks.map(c=>{
+    if(c.ok) met++;
+    return `<div class="ci">
+      <div class="cc" style="background:${c.ok?'#0D2208':'#160606'};border-color:${c.ok?'#22C55E':'#EF4444'};color:${c.ok?'#22C55E':'#EF4444'}">${c.ok?'✓':'✗'}</div>
+      <div style="font-size:12px;color:${c.ok?'#86EFAC':'#64748B'};flex:1">${c.l}</div>
+      <div style="font-size:11px;font-weight:${c.ok?700:400};color:${c.ok?'#22C55E':'#334155'}">${c.ok?'SÌ':'NO'}</div>
+    </div>`;
+  }).join('');
+  const cr=document.getElementById('ckres');
+  cr.style.background=met>=5?'#0F0000':met>=4?'#0F0400':met>=3?'#0A0600':'#050808';
+  cr.style.color=met>=5?'#EF4444':met>=4?'#F97316':met>=3?'#EAB308':'#64748B';
+  cr.style.borderColor=met>=5?'#EF444440':'transparent';
+  cr.textContent=`${met}/7 soddisfatte${met>=6?' → ALLERTA CONVERGENZA JALMICCO':met>=4?' → monitorare evoluzione':' → rischio contenuto'}`;
+}
+
+// ═══════════════════════════════════════════════════
+// LEAFLET MAP
+// ═══════════════════════════════════════════════════
+let LM=null, CP=null, CP_LAG=null, CZONE=null, ZONE_LAG=null;
+let TZONE_MTN=null, TZONE_PLN=null, TZONE_CST=null, TZONE_CARSO=null;
+let ARROWS=[], RADAR_LAYER=null;
+
+const POLY_MTN=[[46.22,12.88],[46.25,13.05],[46.20,13.42],[46.18,13.78],[46.10,13.85],[45.98,13.80],[45.92,13.48],[45.98,13.18],[46.02,12.90]];
+const POLY_PLN=[[45.98,12.92],[45.98,13.53],[45.82,13.68],[45.72,13.50],[45.70,13.08],[45.82,12.95]];
+const POLY_CST=[[45.72,13.05],[45.72,13.55],[45.60,13.80],[45.55,13.80],[45.55,13.05]];
+const POLY_CARSO=[[45.97,13.58],[45.84,13.52],[45.76,13.53],[45.65,13.70],[45.65,13.98],[45.82,13.98],[45.97,13.85]];
+
+// Griglie di punti per l'alone gradiente — una per zona geografica
+// Ogni zona contribuisce con punti di intensità variabile (0-1)
+// Leaflet.heat li fonde in un alone morbido con sfumature naturali
+const HEAT_MTN=[ // Fascia prealpina
+  [46.22,12.90],[46.22,13.15],[46.22,13.40],[46.22,13.65],[46.22,13.85],
+  [46.10,12.95],[46.10,13.20],[46.10,13.45],[46.10,13.70],[46.10,13.85],
+  [45.98,13.10],[45.98,13.35],[45.98,13.55],[45.98,13.75]
+];
+const HEAT_PLN=[ // Pianura friulana
+  [45.98,12.95],[45.98,13.15],[45.98,13.35],[45.98,13.50],
+  [45.88,12.98],[45.88,13.18],[45.88,13.38],[45.88,13.52],
+  [45.78,13.00],[45.78,13.18],[45.78,13.38],[45.78,13.50]
+];
+const HEAT_CST=[ // Fascia costiera
+  [45.70,13.10],[45.70,13.30],[45.70,13.50],[45.70,13.65],
+  [45.60,13.15],[45.60,13.35],[45.60,13.55],[45.60,13.70]
+];
+const HEAT_CARSO=[ // Carso/Monfalconese
+  [45.97,13.58],[45.97,13.75],[45.97,13.92],
+  [45.85,13.55],[45.85,13.72],[45.85,13.90],
+  [45.72,13.62],[45.72,13.80],[45.72,13.95]
+];
+
+// Poligoni zone temporali — fascia prealpina, pianura, costa, Carso/Monfalconese
+const POLY_MTN=[[46.22,12.88],[46.25,13.05],[46.20,13.42],[46.18,13.78],[46.10,13.85],[45.98,13.80],[45.92,13.48],[45.98,13.18],[46.02,12.90]];
+const POLY_PLN=[[45.98,12.92],[45.98,13.53],[45.82,13.68],[45.72,13.50],[45.70,13.08],[45.82,12.95]];
+const POLY_CST=[[45.72,13.05],[45.72,13.55],[45.60,13.80],[45.55,13.80],[45.55,13.05]];
+// Carso/Monfalconese: Gorizia → Monfalcone → Carso → Trieste
+// Meccanismo: convergenza brezza marina adriatica + trigger orografico Carso carsico
+const POLY_CARSO=[[45.97,13.58],[45.84,13.52],[45.76,13.53],[45.65,13.70],[45.65,13.98],[45.82,13.98],[45.97,13.85]];
+
+// Asse convergenza generale prealpi → costa (N-S)
+const CONV_LINE=[[46.13,13.20],[46.00,13.27],[45.97,13.31],[45.913,13.346],[45.89,13.31],[45.77,13.36],[45.70,13.40]];
+
+// Asse convergenza LAGUNARE Marano-Grado → Palmanova → Lauzacco → Cormons → Cividale (SW-NE)
+// Meccanismo: brezza lagunare calda (lagune molto più calde dell'Adriatico aperto)
+// si propaga SW→NE lungo i corridoi Torre-Isonzo-Judrio convergendo con l'aria prealpina fresca
+// Responsabile degli accumuli estremi su Palmanova/Lauzacco/Cormons in episodi di Scirocco
+const CONV_LINE_LAG=[
+  [45.72,13.10],  // Marano Lagunare — sorgente brezza lagunare
+  [45.80,13.18],  // pianura Cervignano/S.Giorgio
+  [45.91,13.31],  // Palmanova / Lauzacco ← zona accumulo principale
+  [45.96,13.42],  // Manzano / Buttrio
+  [45.96,13.52],  // Cormons (bacino Judrio)
+  [46.10,13.43],  // Cividale del Friuli
+];
+
+// Poligono zona interessata dall'asse lagunare SW-NE
+const POLY_LAG=[
+  [45.70,13.07],[45.78,13.14],[45.87,13.23],[45.93,13.29],
+  [45.98,13.40],[46.02,13.46],[46.12,13.47],[46.14,13.40],
+  [46.04,13.38],[46.00,13.33],[45.98,13.28],[45.96,13.20],
+  [45.88,13.14],[45.80,13.09],[45.73,13.05],
+];
+
+function initMap(){
+  try{
+  LM=L.map('mapContainer',{center:[45.970,13.340],zoom:11,scrollWheelZoom:false,tap:false,attributionControl:true});
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
+    attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a>',
+    subdomains:'abcd',maxZoom:19
+  }).addTo(LM);
+
+  // Zone predisposizione — poligoni semi-trasparenti (no dipendenze esterne)
+  // Visibili solo quando ⛈ Predisposizione è attivo
+  TZONE_MTN=L.polygon(POLY_MTN,{color:'#F97316',fillColor:'#F97316',fillOpacity:0,weight:2,opacity:0,dashArray:'6,4'}).addTo(LM);
+  TZONE_PLN=L.polygon(POLY_PLN,{color:'#EAB308',fillColor:'#EAB308',fillOpacity:0,weight:2,opacity:0,dashArray:'6,4'}).addTo(LM);
+  TZONE_CST=L.polygon(POLY_CST,{color:'#38BDF8',fillColor:'#38BDF8',fillOpacity:0,weight:2,opacity:0,dashArray:'6,4'}).addTo(LM);
+  TZONE_CARSO=L.polygon(POLY_CARSO,{color:'#10B981',fillColor:'#10B981',fillOpacity:0,weight:2,opacity:0,dashArray:'4,3'}).addTo(LM);
+
+  // Zona convergenza
+  CZONE=L.circle([45.913,13.346],{radius:4000,color:'#7C3AED',fillColor:'#7C3AED',fillOpacity:0,weight:2,opacity:0,dashArray:'5,4'}).addTo(LM);
+
+  // Asse convergenza generale N-S
+  CP=L.polyline(CONV_LINE,{color:'#7C3AED',weight:3,dashArray:'9,5',opacity:0}).addTo(LM);
+
+  // Asse convergenza LAGUNARE SW-NE (Marano-Palmanova-Cividale-Cormons)
+  // Colore ambra/dorato per distinguerlo dall'asse generale viola
+  CP_LAG=L.polyline(CONV_LINE_LAG,{
+    color:'#F59E0B',weight:3,dashArray:'7,4',opacity:0
+  }).addTo(LM)
+    .bindTooltip('Asse lagunare Marano→Palmanova→Cormons/Cividale',
+      {sticky:true,className:'jal-lbl',direction:'top'});
+
+  // Zona corridoio lagunare SW-NE (poligono semi-trasparente ambra)
+  ZONE_LAG=L.polygon(POLY_LAG,{
+    color:'#F59E0B',fillColor:'#F59E0B',
+    fillOpacity:0,weight:1.5,opacity:0,dashArray:'4,5'
+  }).addTo(LM);
+
+  // Radar RainViewer
+  loadRadar();
+  }catch(e){
+    console.error('initMap:',e);
+    var mc=document.getElementById('mapContainer');
+    if(mc) mc.innerHTML='<div style="color:#EF4444;padding:20px;font-size:12px">⚠ Errore mappa: '+e.message+'</div>';
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// PRECIPITAZIONI — 8 punti FVG, best-mix
+async function loadPrecip(){
+  try{
+    // Fetch precipitazioni da Open-Meteo best-mix per i 8 punti FVG
+    // Solo best-mix (no AROME): più veloce e affidabile su mobile
+    const fetchPt=async(pt)=>{
+      try{
+        const url=`https://api.open-meteo.com/v1/forecast?latitude=${pt.lat}&longitude=${pt.lon}&hourly=precipitation&forecast_days=2&timezone=Europe%2FRome`;
+        const d=await fj(url);
+        const now=new Date();
+        const pad=n=>String(n).padStart(2,'0');
+        const ns=`${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:00`;
+        const idx=d.hourly.time.indexOf(ns);
+        if(idx<0) return{...pt,p3:0,p6:0,p12:0,p24:0};
+        const pr=d.hourly.precipitation||[];
+        const s=(h)=>Math.round(pr.slice(idx,idx+h).reduce((a,b)=>a+(b||0),0)*10)/10;
+        return{...pt,p3:s(3),p6:s(6),p12:s(12),p24:s(24)};
+      }catch(e){
+        return{...pt,p3:0,p6:0,p12:0,p24:0};
+      }
+    };
+    const results=await Promise.all(PRECIP_PTS.map(fetchPt));
+    PRECIP_DATA=results;
+    updatePrecipPanel();
+    updatePrecipLayer();
+  }catch(e){
+    console.warn('loadPrecip:',e.message);
+    // Imposta dati vuoti per togliere il messaggio di caricamento
+    PRECIP_DATA=PRECIP_PTS.map(pt=>({...pt,p3:0,p6:0,p12:0,p24:0}));
+    updatePrecipPanel();
+  }
+  setTimeout(loadPrecip,1800000);
+}
+
+function updatePrecipLayer(){
+  if(!PRECIP_LAYER||!PRECIP_DATA) return;
+  if(!layerVis.pioggia){if(LM.hasLayer(PRECIP_LAYER))LM.removeLayer(PRECIP_LAYER);return;}
+  const key='p'+precipWin;
+  const heatData=PRECIP_DATA
+    .filter(d=>d[key]>0.3)
+    .map(d=>[d.lat,d.lon,Math.min(1,d[key]/35)]); // 35mm = intensità massima
+  PRECIP_LAYER.setLatLngs(heatData);
+  if(!LM.hasLayer(PRECIP_LAYER)) PRECIP_LAYER.addTo(LM);
+}
+
+function updatePrecipPanel(){
+  const el=document.getElementById('precipList');
+  if(!el||!PRECIP_DATA) return;
+  const key='p'+precipWin;
+  el.innerHTML=PRECIP_DATA.map(d=>{
+    const v=d[key];
+    const col=v>=20?'#DB2777':v>=10?'#7C3AED':v>=5?'#0284C7':v>=1?'#38BDF8':'#334155';
+    const bar=Math.round(Math.min(100,v/35*100));
+    return`<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #0A1018">
+      <div style="width:58px;font-size:9px;color:#64748B;flex-shrink:0">${d.name}</div>
+      <div style="flex:1;background:#05080F;border-radius:2px;height:4px;overflow:hidden">
+        <div style="width:${bar}%;height:100%;background:${col};border-radius:2px"></div>
+      </div>
+      <div style="font-size:10px;font-weight:600;color:${col};min-width:38px;text-align:right">${v>0?'~'+v+'mm':'—'}</div>
+    </div>`;
+  }).join('');
+}
+
+let radarVisible=true;
+
+function toggleRadar(){
+  radarVisible=!radarVisible;
+  const btn=document.getElementById('radarToggle');
+  if(RADAR_LAYER){
+    if(radarVisible){RADAR_LAYER.addTo(LM);if(btn){btn.style.color='#06B6D4';btn.style.borderColor='#1A2E45';}}
+    else{LM.removeLayer(RADAR_LAYER);if(btn){btn.style.color='#334155';btn.style.borderColor='#0A1422';}}
+  }
+}
+
+async function loadRadar(){
+  try{
+    const d=await(await fetch('https://api.rainviewer.com/public/weather-maps.json')).json();
+    const frame=d.radar.past[d.radar.past.length-1];
+    if(RADAR_LAYER) LM.removeLayer(RADAR_LAYER);
+    RADAR_LAYER=L.tileLayer(
+      `${d.host}${frame.path}/256/{z}/{x}/{y}/2/1_0.png`,
+      {opacity:0.65,tileSize:256,zIndex:200,maxNativeZoom:7,maxZoom:19,attribution:'© RainViewer'}
+    );
+    if(radarVisible) RADAR_LAYER.addTo(LM);
+    // Mostra timestamp radar in formato leggibile
+    const rt=document.getElementById('radarTime');
+    if(rt){
+      const dt=new Date(frame.time*1000);
+      const gg=['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][dt.getDay()];
+      const hh=String(dt.getHours()).padStart(2,'0');
+      const mm=String(dt.getMinutes()).padStart(2,'0');
+      rt.textContent=`📡 ${gg} ${hh}:${mm}`;
+    }
+  }catch(e){
+    console.warn('Radar:',e.message);
+  }finally{
+    setTimeout(loadRadar,300000);
+  }
+}
+
+
+function updMap(p,risk){
+  if(!LM) return;
+  const tRisk=RT.find(r=>p.ts<=r.m)||RT[4];
+  const tCol=tRisk.c;
+  const ki=p.ki?.v??null;
+
+  // ⚡ Zone temporali — attivazione normale (ts) O condizionale (K Index)
+  // Evento calibrazione: Rivolto 00UTC 26/06/2026 — KI=32.7, PWAT=44.7, LI=+0.7, CIN=193
+  // Con ts=0-1 sul piano ma temporali attivi su Attimis e Monfalcone per trigger locale
+
+  const isBoraBrezza=p.t850!=null&&p.t850>20&&p.dp!=null&&p.dp>=-1&&p.dp<=3&&p.sst.s>=2;
+  const isLocalizedCarso=isBoraBrezza||(p.sst.s>=2&&p.shr.s<=2&&(p.dir.id==='SE'||p.dir.id==='S'||p.dir.id==='SW'));
+  const isBrezza=p.shr.s<=2&&(p.sst.s>=1||p.dir.id==='SE'||p.dir.id==='SW');
+  const showMtn=!isLocalizedCarso&&p.ts>=4;
+
+  // ═══ ZONE PREDISPOSIZIONE — poligoni, visibili solo se toggle pred è ON ═══
+  const predOn=layerVis.pred;
+  const polyStyle=(col,show,sc)=>show&&predOn
+    ?{color:col,fillColor:col,fillOpacity:0.06+sc*0.022,opacity:0.65,weight:2,dashArray:'6,4'}
+    :{fillOpacity:0,opacity:0};
+
+  if(TZONE_MTN) TZONE_MTN.setStyle(polyStyle(tCol,showMtn,p.ts));
+  if(TZONE_PLN) TZONE_PLN.setStyle(polyStyle(tCol,!isLocalizedCarso&&p.ts>=5,p.ts-1));
+  if(TZONE_CST) TZONE_CST.setStyle(polyStyle('#38BDF8',!isLocalizedCarso&&p.ts>=5&&p.dir.s>=2,p.ts-2));
+  if(TZONE_CARSO){
+    const showC=p.ts>=3&&(isBrezza||isBoraBrezza);
+    if(showC&&predOn){
+      const cCol=isBoraBrezza?tCol:p.ts>=6?'#F97316':p.ts>=4?'#34D399':'#10B981';
+      TZONE_CARSO.setStyle({color:cCol,fillColor:cCol,fillOpacity:0.06+p.ts*0.022,opacity:0.65,weight:2,dashArray:'4,3'});
+    }else{
+      TZONE_CARSO.setStyle({fillOpacity:0,opacity:0});
+    }
+  }
+
+  // Frecce vettoriali di moto
+  // Frecce rimosse — il radar RainViewer mostra già il moto reale dei nuclei
+
+  // 💧 Zona convergenza — solo con segnale forte (cs>=9, non solo cs>=5)
+  // Con cs "debole" (5-8) il cerchio aggiunge confusione visiva senza informazione operativa
+  if(CZONE){
+    if(p.cs>=9&&p.ci.s>=1){
+      const cCol=p.cs>=9?'#EF4444':p.cs>=7?'#F97316':'#7C3AED';
+      let clat=45.913,clon=13.346;
+      if(p.dir.id==='SE'){clat=45.920;clon=13.370;}
+      else if(p.dir.id==='E'){clat=45.930;clon=13.330;}
+      else if(p.dir.id==='SW'){clat=45.900;clon=13.310;}
+      CZONE.setLatLng([clat,clon]);
+      CZONE.setRadius(3500+p.cs*400);
+      CZONE.setStyle({color:cCol,fillColor:cCol,fillOpacity:0.07+(p.cs/12)*0.15,opacity:0.7,weight:2});
+    }else{
+      CZONE.setStyle({fillOpacity:0,opacity:0});
+    }
+  }
+  // ─── Assi e zone convergenza ─────────────────────
+  // Nascosti quando toggle convergenze è spento O quando ci=0
+  const convOn=layerVis.conv;
+  const isLagFlow=p.dir&&(p.dir.id==='SE'||p.dir.id==='S'||p.dir.id==='SW');
+  const showLag=convOn&&isLagFlow&&p.sst.s>=1&&p.ci.s>=1&&(p.pwat.v??0)>=28;
+  const showLagCond=!showLag&&convOn&&isLagFlow&&p.sst.s>=1&&p.ki.s>=2&&p.shr.s===0&&p.ci.s>=1;
+
+  // Assi convergenza — visibili solo con toggle ON e segnale moderato (ci>=2)
+  if(CP){
+    if(convOn&&p.ci.s>=2) CP.setStyle({opacity:.85,weight:3,color:risk.c,dashArray:'9,5'});
+    else CP.setStyle({opacity:0});
+  }
+  if(CP_LAG){
+    if(showLag&&p.cs>=9){
+      const lagC=p.cs>=11?'#EF4444':p.cs>=8?'#F97316':'#F59E0B';
+      CP_LAG.setStyle({opacity:.85,weight:3.5,color:lagC,dashArray:'7,4'});
+    }else if(showLagCond&&p.cs>=9){
+      CP_LAG.setStyle({opacity:.38,weight:2,color:'#B45309',dashArray:'3,8'});
+    }else{
+      CP_LAG.setStyle({opacity:0});
+    }
+  }
+  if(ZONE_LAG){
+    if(showLag&&p.cs>=9){
+      const lagC=p.cs>=11?'#EF4444':p.cs>=8?'#F97316':'#F59E0B';
+      ZONE_LAG.setStyle({color:lagC,fillColor:lagC,fillOpacity:0.05+(p.cs/12)*0.10,opacity:0.45,weight:1.5,dashArray:'4,5'});
+    }else{
+      ZONE_LAG.setStyle({fillOpacity:0,opacity:0});
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// UTILITIES
+// ═══════════════════════════════════════════════════
+function ftl(t){
+  if(!t) return '--';
+  const d=new Date(t);
+  const days=['Dom','Lun','Mar','Mer','Gio','Ven','Sab'];
+  const now=new Date();
+  const pad=n=>String(n).padStart(2,'0');
+  const isT=d.getDate()===now.getDate()&&d.getMonth()===now.getMonth();
+  return `${isT?'Oggi':days[d.getDay()]} ${pad(d.getHours())}:00`;
+}
+
+function setSt(st,txt){
+  const dot=document.getElementById('sdot');
+  document.getElementById('stxt').textContent=txt;
+  dot.style.background=st==='ok'?'#22C55E':st==='err'?'#EF4444':'#EAB308';
+  dot.style.animation=st==='load'?'spin .8s linear infinite':'none';
+}
+
+// ═══════════════════════════════════════════════════
+// EVENTS + INIT
+// ═══════════════════════════════════════════════════
+// ─── Event listeners pulsanti ───────────────────────
+document.getElementById('tslider').addEventListener('input',e=>{
+  upd(parseInt(e.target.value));
+});
+
+// Toggle layer — definiti qui con addEventListener, più affidabili degli onclick
+['pred','conv','pioggia'].forEach(name=>{
+  const btn=document.getElementById('btn_'+name);
+  if(btn) btn.addEventListener('click',()=>toggleLayer(name));
+});
+
+// Pulsanti finestra temporale
+document.querySelectorAll('.tbtn').forEach(b=>{
+  b.addEventListener('click',()=>setPrecipWindow(parseInt(b.dataset.h)));
+});
+
+// Status dot initial spin
+document.getElementById('sdot').style.cssText='width:7px;height:7px;border-radius:50%;flex-shrink:0;margin-right:5px;background:#EAB308;animation:spin .8s linear infinite';
+
+// Verifica Leaflet prima di chiamare initMap
+if(typeof L === 'undefined'){
+  var el=document.getElementById('stxt');
+  if(el) el.textContent='⚠ Leaflet non caricato — CDN bloccata';
+  var mc=document.getElementById('mapContainer');
+  if(mc) mc.innerHTML='<div style="color:#EF4444;padding:20px;font-size:12px">⚠ Leaflet CDN non disponibile. Prova a ricaricare.</div>';
+}else{
+  var el2=document.getElementById('stxt');
+  if(el2) el2.textContent='Leaflet OK — inizializzazione...';
+  initMap();
+  loadAll();
+  loadPrecip();
+}
+</script>
+</body>
+</html>
