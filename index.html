@@ -240,6 +240,15 @@ button,.dir-btn{touch-action:manipulation;min-height:36px;cursor:pointer}
 <!-- PAGINA ANALISI -->
 <div id="pageAnalisi" style="display:none">
 
+<!-- SONDAGGIO RIVOLTO -->
+<div class="sc" style="margin-bottom:11px;border-left:3px solid #06B6D4">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    <div style="font-size:9px;color:#06B6D4;letter-spacing:2px;text-transform:uppercase">📡 Sondaggio Rivolto (16045)</div>
+    <div id="rivoltoTime" style="font-size:9px;color:#334155"></div>
+  </div>
+  <div id="rivoltoSounding"><div style="text-align:center;padding:10px;color:#475569;font-size:10px">⏳ Caricamento...</div></div>
+</div>
+
 <!-- MODELLI GLOBALI -->
 <div style="font-size:9px;color:#06B6D4;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;margin-top:2px">🌍 Modelli Globali</div>
 <div class="sc" id="mcompGlobalCard" style="margin-bottom:11px">
@@ -330,6 +339,8 @@ function switchTab(name){
   document.getElementById('pageAnalisi').style.display=name==='analisi'?'block':'none';
   document.getElementById('tabMonitor').className='tab-btn'+(name==='monitor'?' active':'');
   document.getElementById('tabAnalisi').className='tab-btn'+(name==='analisi'?' active':'');
+  // Carica sondaggio quando si apre il tab Analisi
+  if(name==='analisi') loadRivoltoSounding();
 }
 
 // Pannello modelli globali (ECMWF + ICON-EU)
@@ -1259,7 +1270,116 @@ function initMap(){
 }
 
 // ═══════════════════════════════════════════════════
-// PRECIPITAZIONI — 8 punti FVG, best-mix
+// SONDAGGIO RIVOLTO — Wyoming/Meteociel via proxy CORS
+// 00Z = ore 02:00 locali, 12Z = ore 14:00 locali
+// ═══════════════════════════════════════════════════
+function parseWyomingSounding(txt){
+  const ex=(p)=>{const m=txt.match(p);return m?parseFloat(m[1]):null;};
+  return{
+    cape: ex(/Convective Available Potential Energy:\s*([\d.]+)/i),
+    cin:  ex(/Convective Inhibition:\s*(-?[\d.]+)/i),
+    li:   ex(/Lifted index:\s*(-?[\d.]+)/i),
+    ki:   ex(/K index:\s*(-?[\d.]+)/i),
+    tt:   ex(/Totals totals index:\s*(-?[\d.]+)/i),
+    pwat: ex(/Precipitable water[^:]*:\s*([\d.]+)/i),
+    lcl:  ex(/Pres.*?Lifted Condensation Level:\s*([\d.]+)/i),
+  };
+}
+
+function parseMeteocielSounding(html){
+  const p=new DOMParser();
+  const doc=p.parseFromString(html,'text/html');
+  const txt=(doc.body.innerText||doc.body.textContent||'').replace(/\s+/g,' ');
+  const ex=(p)=>{const m=txt.match(p);return m?parseFloat(m[1]):null;};
+  return{
+    cape: ex(/CAPE[^:\d-]*:?\s*([\d.]+)/i),
+    cin:  ex(/CIN[^:\d-]*:?\s*(-?[\d.]+)/i),
+    li:   ex(/\bLI\b[^:\d-]*:?\s*(-?[\d.]+)/i),
+    ki:   ex(/K\s*index[^:\d-]*:?\s*(-?[\d.]+)/i),
+    tt:   ex(/Totals[^:\d-]*:?\s*(-?[\d.]+)/i),
+    pwat: ex(/PWAT[^:\d-]*:?\s*([\d.]+)/i),
+  };
+}
+
+function renderSounding(data, ech){
+  const el=document.getElementById('rivoltoSounding');
+  const tEl=document.getElementById('rivoltoTime');
+  if(!el) return;
+  const lab=ech===12?'12Z — ore 14:00 locali':'00Z — ore 02:00 locali';
+  if(tEl) tEl.textContent=lab;
+  const items=[
+    {n:'CAPE', v:data.cape, u:'J/kg', c:!data.cape?'#475569':data.cape>1000?'#EF4444':data.cape>300?'#F97316':data.cape>50?'#EAB308':'#22C55E'},
+    {n:'CIN',  v:data.cin,  u:'J/kg', c:data.cin==null?'#475569':Math.abs(data.cin)<50?'#22C55E':Math.abs(data.cin)<150?'#EAB308':'#EF4444'},
+    {n:'LI (Lifted Index)', v:data.li, u:'', c:data.li==null?'#475569':data.li<-6?'#EF4444':data.li<-3?'#F97316':data.li<0?'#EAB308':'#22C55E'},
+    {n:'K Index', v:data.ki, u:'', c:data.ki==null?'#475569':data.ki>35?'#EF4444':data.ki>30?'#F97316':data.ki>20?'#EAB308':'#22C55E'},
+    {n:'TT Index', v:data.tt, u:'', c:data.tt==null?'#475569':data.tt>50?'#EF4444':data.tt>44?'#F97316':'#22C55E'},
+    {n:'PWAT', v:data.pwat, u:'mm', c:data.pwat==null?'#475569':data.pwat>40?'#EF4444':data.pwat>30?'#F97316':data.pwat>20?'#EAB308':'#22C55E'},
+  ].filter(i=>i.v!=null);
+  if(!items.length){
+    el.innerHTML='<div style="color:#475569;font-size:10px;text-align:center;padding:8px">Dati non estraibili dal sondaggio</div>';
+    return;
+  }
+  el.innerHTML=`<div style="font-size:8px;color:#22C55E;margin-bottom:6px">✓ Dati misurati — più accurati dei modelli</div>`+
+    items.map(i=>`<div class="ci">
+      <div style="font-size:10px;color:#64748B;flex:1">${i.n}</div>
+      <div style="font-size:12px;font-weight:700;color:${i.c}">${i.v.toFixed(1)}${i.u}</div>
+    </div>`).join('');
+}
+
+async function loadRivoltoSounding(){
+  const el=document.getElementById('rivoltoSounding');
+  const tEl=document.getElementById('rivoltoTime');
+  if(!el) return;
+  const now=new Date();
+  const h=now.getHours();
+  // 12Z disponibile dopo le 14:00 locali, 00Z dopo le 03:00
+  const ech=h>=14?12:h>=3?0:null;
+  if(ech===null){
+    if(tEl) tEl.textContent='Prossimo sondaggio alle 03:00';
+    el.innerHTML='<div style="color:#475569;font-size:10px;text-align:center;padding:8px">⏳ Sondaggio non ancora disponibile</div>';
+    return;
+  }
+  const pad=n=>String(n).padStart(2,'0');
+  const y=now.getFullYear(),m=pad(now.getMonth()+1),d=pad(now.getDate());
+  const ddhh=`${d}${pad(ech)}`;
+
+  // Tenta Wyoming via allorigins proxy
+  const wyUrl=`https://weather.uwyo.edu/cgi-bin/sounding.py?TYPE=TEXT%3ALIST&YEAR=${y}&MONTH=${m}&FROM=${ddhh}&TO=${ddhh}&STNM=16045`;
+  const proxy=`https://api.allorigins.win/raw?url=${encodeURIComponent(wyUrl)}`;
+  el.innerHTML='<div style="color:#475569;font-size:10px;text-align:center;padding:8px">📡 Connessione a Wyoming...</div>';
+  try{
+    const r=await fetch(proxy,{signal:AbortSignal.timeout(12000)});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const txt=await r.text();
+    if(!txt.includes('CAPE')&&!txt.includes('Lifted')) throw new Error('dati assenti');
+    renderSounding(parseWyomingSounding(txt),ech);
+    return;
+  }catch(e){console.warn('Wyoming:',e.message);}
+
+  // Fallback: Meteociel
+  const mcUrl=`https://www.meteociel.fr/obs/sondage.php?ech=${ech}&code=16045&dt=${y}-${m}-${d}`;
+  const proxy2=`https://api.allorigins.win/raw?url=${encodeURIComponent(mcUrl)}`;
+  el.innerHTML='<div style="color:#475569;font-size:10px;text-align:center;padding:8px">📡 Tentativo Meteociel...</div>';
+  try{
+    const r=await fetch(proxy2,{signal:AbortSignal.timeout(12000)});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const html=await r.text();
+    const data=parseMeteocielSounding(html);
+    if(!data.cape&&!data.li) throw new Error('dati non trovati');
+    renderSounding(data,ech);
+    return;
+  }catch(e){console.warn('Meteociel:',e.message);}
+
+  // Fallback finale: link diretto
+  if(tEl) tEl.textContent=ech===12?'12Z':'00Z';
+  el.innerHTML=`<div style="font-size:10px;color:#475569;padding:8px;text-align:center">
+    ⚠ Accesso automatico bloccato.
+    <a href="${mcUrl}" target="_blank" style="color:#06B6D4;display:block;margin-top:6px">→ Apri sondaggio su Meteociel</a>
+    <a href="${wyUrl}" target="_blank" style="color:#38BDF8;display:block;margin-top:3px">→ Apri su Wyoming Univ.</a>
+  </div>`;
+}
+
+
 async function loadPrecip(){
   try{
     // Fetch precipitazioni da Open-Meteo best-mix per i 8 punti FVG
