@@ -56,7 +56,8 @@ input[type=range]{width:100%;cursor:pointer;display:block;height:34px;-webkit-ap
 input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:2px;background:#1A2E45}
 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:24px;height:24px;border-radius:50%;margin-top:-10px;box-shadow:0 0 4px rgba(0,0,0,.5)}
 button,.dir-btn{touch-action:manipulation;min-height:36px;cursor:pointer}
-.leaflet-container{touch-action:pan-x pan-y}
+.tab-btn{flex:1;padding:8px 4px;border-radius:8px;border:1px solid #1A2E45;font-size:11px;font-weight:700;cursor:pointer;touch-action:manipulation;background:#0A1422;color:#475569;transition:all .2s;letter-spacing:.5px}
+.tab-btn.active{background:#0E2847;color:#06B6D4;border-color:#06B6D4}
 
 /* ── LAYOUT SEMPLICE — colonna unica, tutto scorre ── */
 #desktopGrid{display:block}
@@ -88,7 +89,13 @@ button,.dir-btn{touch-action:manipulation;min-height:36px;cursor:pointer}
   <span id="srun" class="mono" style="color:#334155;font-size:9px"></span>
 </div>
 
-<!-- TIME SLIDER -->
+<!-- TAB NAVIGATION -->
+<div style="display:flex;gap:8px;margin-bottom:12px">
+  <button id="tabMonitor" class="tab-btn active" onclick="switchTab('monitor')">📡 Monitor</button>
+  <button id="tabAnalisi"  class="tab-btn"        onclick="switchTab('analisi')">🔬 Analisi</button>
+</div>
+
+<div id="pageMonitor">
 <div class="sc" id="sliderCard" style="padding:11px 14px">
   <div style="text-align:center;margin-bottom:8px">
     <div id="tlabel" class="mono" style="font-size:22px;font-weight:700;color:#06B6D4;line-height:1">--</div>
@@ -220,6 +227,26 @@ button,.dir-btn{touch-action:manipulation;min-height:36px;cursor:pointer}
   </div>
 </div>
 
+<!-- fine pageMonitor -->
+</div>
+
+<!-- PAGINA ANALISI -->
+<div id="pageAnalisi" style="display:none">
+
+<!-- MODELLI GLOBALI -->
+<div style="font-size:9px;color:#06B6D4;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;margin-top:2px">🌍 Modelli Globali</div>
+<div class="sc" id="mcompGlobalCard" style="margin-bottom:11px">
+  <div style="font-size:9px;color:#475569;margin-bottom:8px">ECMWF IFS 9km · ICON-EU 13km — scala sinottica</div>
+  <div id="mcompGlobal"><div style="text-align:center;padding:12px;color:#475569;font-size:11px">⏳ Caricamento...</div></div>
+</div>
+
+<!-- MODELLI LOCALI LAM -->
+<div style="font-size:9px;color:#10B981;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">🎯 Modelli Locali LAM</div>
+<div class="sc" id="mcompLocalCard" style="margin-bottom:11px">
+  <div style="font-size:9px;color:#475569;margin-bottom:8px">ICON-D2 2.2km · ICON-2I 🇮🇹 2.2km · MeteoSwiss CH2 2km</div>
+  <div id="mcompLocal"><div style="text-align:center;padding:12px;color:#475569;font-size:11px">⏳ Caricamento...</div></div>
+</div>
+
 <!-- MODEL COMPARISON -->
 <div class="sc" id="mcompCard">
   <div style="font-size:9px;color:#06B6D4;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px">Confronto Modelli</div>
@@ -249,7 +276,9 @@ button,.dir-btn{touch-action:manipulation;min-height:36px;cursor:pointer}
   <a class="sl" href="https://mappe.protezionecivile.gov.it" target="_blank"><div><div style="font-weight:600;font-size:12px;color:#06B6D4">DPC Allerta Meteo</div><div style="font-size:11px;color:#475569">Bollettini allerta meteo-idrogeologica</div></div><span style="color:#06B6D4">↗</span></a>
   <a class="sl" href="https://www.meteorologix.com" target="_blank"><div><div style="font-weight:600;font-size:12px;color:#06B6D4">MeteorologiX</div><div style="font-size:11px;color:#475569">Riferimento visivo ICON-RUC</div></div><span style="color:#06B6D4">↗</span></a>
 </div>
-<div class="mono" style="text-align:center;margin-top:10px;margin-bottom:4px;font-size:9px;color:#1A2535">FVG Convergenza Monitor v1.0 · ECMWF+ICON-D2+AROME</div>
+<div class="mono" style="text-align:center;margin-top:10px;margin-bottom:4px;font-size:9px;color:#1A2535">Previsione Fenomeni Forti FVG v2.0 · ECMWF+ICON-D2+ICON-2I+CH2</div>
+
+</div><!-- fine pageAnalisi -->
 
 <script>try{document.getElementById('stxt').textContent='JS mini OK';}catch(e){}</script>
 <script>
@@ -294,6 +323,65 @@ function toggleLayer(name){
       if(typeof D!=='undefined'&&D&&typeof upd==='function') upd(sl?parseInt(sl.value):0);
     }
   }catch(e){console.warn('toggleLayer:',e.message);}
+}
+
+function switchTab(name){
+  document.getElementById('pageMonitor').style.display=name==='monitor'?'block':'none';
+  document.getElementById('pageAnalisi').style.display=name==='analisi'?'block':'none';
+  document.getElementById('tabMonitor').className='tab-btn'+(name==='monitor'?' active':'');
+  document.getElementById('tabAnalisi').className='tab-btn'+(name==='analisi'?' active':'');
+}
+
+// Pannello modelli globali (ECMWF + ICON-EU)
+function renderGlobalModels(idx){
+  const el=document.getElementById('mcompGlobal');
+  if(!el||!D) return;
+  const models=[
+    {n:'Open-Meteo (best-mix)',cape:D.cape[idx],pwat:D.pwat[idx],t850:D.t850[idx],main:true},
+    D.ec ?{n:'ECMWF IFS 9km',   cape:D.ec.cape[idx], pwat:D.ec.pwat[idx], t850:D.ec.t850[idx]}:null,
+    D.eu ?{n:'ICON-EU 13km',    cape:D.eu.cape[idx], pwat:D.eu.pwat[idx], t850:D.eu.t850[idx]}:null,
+  ].filter(Boolean);
+  const maxC=Math.max(...models.map(m=>m.cape||0),50);
+  const spread=models.filter(m=>!m.main&&m.cape!=null).map(m=>m.cape);
+  const sp=spread.length>1?Math.max(...spread)-Math.min(...spread):null;
+  const agrC=sp==null?'#475569':sp<300?'#22C55E':sp<700?'#EAB308':'#EF4444';
+  el.innerHTML=`<div style="display:flex;justify-content:space-between;margin-bottom:6px">
+    <div style="font-size:9px;color:#475569">CAPE · PWAT · T850</div>
+    ${sp!=null?`<div style="font-size:9px;font-weight:600;color:${agrC}">Spread: ${Math.round(sp)} J/kg</div>`:''}
+  </div>`+models.map(m=>{
+    const pct=m.cape!=null?(m.cape/maxC*100).toFixed(0):0;
+    const bc=m.cape==null?'#1A2535':m.cape>=1500?'#EF4444':m.cape>=500?'#F97316':'#22C55E';
+    return`<div class="mr"><div style="font-weight:${m.main?700:400};font-size:10px;color:${m.main?'#06B6D4':'#64748B'};width:80px;flex-shrink:0">${m.n}</div>
+    <div class="mbw"><div class="mb" style="width:${pct}%;background:${bc}"></div></div>
+    <div style="font-size:10px;color:#64748B;min-width:120px;text-align:right">${m.cape!=null?Math.round(m.cape):'N/D'} J/kg · ${m.pwat!=null?m.pwat.toFixed(0):'--'}mm · ${m.t850!=null?m.t850.toFixed(1):'--'}°</div></div>`;
+  }).join('');
+}
+
+// Pannello modelli locali LAM (ICON-D2 + ICON-2I + CH2)
+function renderLocalModels(idx){
+  const el=document.getElementById('mcompLocal');
+  if(!el||!D) return;
+  const models=[
+    D.d2 ?{n:'ICON-D2 ★ 2.2km',  cape:D.d2.cape[idx],  pwat:D.d2.pwat[idx],  t850:D.d2.t850[idx]}:null,
+    D.i2i?{n:'ICON-2I 🇮🇹 2.2km', cape:D.i2i.cape[idx], pwat:D.i2i.pwat[idx], t850:D.i2i.t850[idx]}:null,
+    D.ch2?{n:'MeteoSwiss CH2 2km',cape:D.ch2.cape[idx], pwat:D.ch2.pwat[idx], t850:D.ch2.t850[idx]}:null,
+  ].filter(Boolean);
+  if(!models.length){el.innerHTML='<div style="color:#475569;font-size:10px;text-align:center;padding:8px">Modelli locali non disponibili</div>';return;}
+  const maxC=Math.max(...models.map(m=>m.cape||0),50);
+  const spread=models.filter(m=>m.cape!=null).map(m=>m.cape);
+  const sp=spread.length>1?Math.max(...spread)-Math.min(...spread):null;
+  const agrC=sp==null?'#475569':sp<200?'#22C55E':sp<500?'#EAB308':'#EF4444';
+  const agrL=sp==null?'--':sp<200?'Concordi ✓':sp<500?'Parziali':'Discordi ⚠';
+  el.innerHTML=`<div style="display:flex;justify-content:space-between;margin-bottom:6px">
+    <div style="font-size:9px;color:#475569">CAPE · PWAT · T850</div>
+    ${sp!=null?`<div style="font-size:9px;font-weight:600;color:${agrC}">${agrL} — Δ${Math.round(sp)} J/kg</div>`:''}
+  </div>`+models.map(m=>{
+    const pct=m.cape!=null?(m.cape/maxC*100).toFixed(0):0;
+    const bc=m.cape==null?'#1A2535':m.cape>=1500?'#EF4444':m.cape>=500?'#F97316':'#22C55E';
+    return`<div class="mr"><div style="font-size:10px;color:#64748B;width:90px;flex-shrink:0">${m.n}</div>
+    <div class="mbw"><div class="mb" style="width:${pct}%;background:${bc}"></div></div>
+    <div style="font-size:10px;color:#64748B;min-width:120px;text-align:right">${m.cape!=null?Math.round(m.cape):'N/D'} J/kg · ${m.pwat!=null?m.pwat.toFixed(0):'--'}mm · ${m.t850!=null?m.t850.toFixed(1):'--'}°</div></div>`;
+  }).join('');
 }
 
 function setPrecipWindow(h){
@@ -1054,8 +1142,11 @@ function upd(idx){
         </div>`;
       }).join('')+
       (ecLeads?`<div style="font-size:9px;color:#EAB308;margin-top:7px;padding:5px 7px;background:#0C0900;border-radius:5px;border-left:2px solid #EAB308">
-        ⚠ ECMWF stima CAPE ${Math.round(ecCape-iconMax)} J/kg sopra ICON. Possibile sovrastima: ICON-2I 🇮🇹 e MeteoSwiss CH2 a 2km risolvono parzialmente la convezione, consumando il CAPE prima che si accumuli.
+        ⚠ ECMWF stima CAPE ${Math.round(ecCape-iconMax)} J/kg sopra ICON. Possibile sovrastima.
       </div>`:'');
+    // Aggiorna anche i pannelli separati globali/locali
+    renderGlobalModels(idx);
+    renderLocalModels(idx);
   }
 
   // Checklist
@@ -1091,27 +1182,6 @@ let LM=null, CP=null, CP_LAG=null, CZONE=null, ZONE_LAG=null;
 let TZONE_MTN=null, TZONE_PLN=null, TZONE_CST=null, TZONE_CARSO=null;
 let ARROWS=[], RADAR_LAYER=null;
 
-// Griglie di punti per l'alone gradiente (non più usate ma mantenute per compatibilità)
-const HEAT_MTN=[ // Fascia prealpina
-  [46.22,12.90],[46.22,13.15],[46.22,13.40],[46.22,13.65],[46.22,13.85],
-  [46.10,12.95],[46.10,13.20],[46.10,13.45],[46.10,13.70],[46.10,13.85],
-  [45.98,13.10],[45.98,13.35],[45.98,13.55],[45.98,13.75]
-];
-const HEAT_PLN=[ // Pianura friulana
-  [45.98,12.95],[45.98,13.15],[45.98,13.35],[45.98,13.50],
-  [45.88,12.98],[45.88,13.18],[45.88,13.38],[45.88,13.52],
-  [45.78,13.00],[45.78,13.18],[45.78,13.38],[45.78,13.50]
-];
-const HEAT_CST=[ // Fascia costiera
-  [45.70,13.10],[45.70,13.30],[45.70,13.50],[45.70,13.65],
-  [45.60,13.15],[45.60,13.35],[45.60,13.55],[45.60,13.70]
-];
-const HEAT_CARSO=[ // Carso/Monfalconese
-  [45.97,13.58],[45.97,13.75],[45.97,13.92],
-  [45.85,13.55],[45.85,13.72],[45.85,13.90],
-  [45.72,13.62],[45.72,13.80],[45.72,13.95]
-];
-
 // Poligoni zone temporali — fascia prealpina, pianura, costa, Carso/Monfalconese
 const POLY_MTN=[[46.22,12.88],[46.25,13.05],[46.20,13.42],[46.18,13.78],[46.10,13.85],[45.98,13.80],[45.92,13.48],[45.98,13.18],[46.02,12.90]];
 const POLY_PLN=[[45.98,12.92],[45.98,13.53],[45.82,13.68],[45.72,13.50],[45.70,13.08],[45.82,12.95]];
@@ -1146,7 +1216,7 @@ const POLY_LAG=[
 
 function initMap(){
   try{
-  LM=L.map('mapContainer',{center:[45.970,13.340],zoom:11,scrollWheelZoom:false,tap:false,attributionControl:true});
+  LM=L.map('mapContainer',{center:[46.05,13.15],zoom:8,scrollWheelZoom:false,tap:false,attributionControl:true});
   L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
     attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/attributions">CARTO</a>',
     subdomains:'abcd',maxZoom:19
