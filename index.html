@@ -228,6 +228,13 @@ button,.dir-btn{touch-action:manipulation;min-height:36px;cursor:pointer}
 </div>
 
 <!-- fine pageMonitor -->
+<!-- CHECKLIST — nella pagina Monitor per accesso rapido -->
+<div class="sc" id="cklistCard" style="margin-bottom:11px">
+  <div style="font-size:9px;color:#06B6D4;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px">✅ 7 Condizioni chiave — Jalmicco/FVG centro-orientale</div>
+  <div id="cklist"></div>
+  <div id="ckres" style="margin-top:10px;padding:9px 12px;border-radius:6px;font-size:12px;font-weight:600;text-align:center;border:1px solid transparent"></div>
+</div>
+
 </div>
 
 <!-- PAGINA ANALISI -->
@@ -258,13 +265,6 @@ button,.dir-btn{touch-action:manipulation;min-height:36px;cursor:pointer}
 <div class="sc" id="pgridCard">
   <div style="font-size:9px;color:#06B6D4;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px">Parametri Diagnostici — ECMWF primario</div>
   <div id="pgrid"></div>
-</div>
-
-<!-- CHECKLIST -->
-<div class="sc" id="cklistCard">
-  <div style="font-size:9px;color:#06B6D4;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px">Checklist — 7 condizioni chiave Jalmicco</div>
-  <div id="cklist"></div>
-  <div id="ckres" style="margin-top:10px;padding:9px 12px;border-radius:6px;font-size:12px;font-weight:600;text-align:center;border:1px solid transparent"></div>
 </div>
 
 <!-- SOURCES -->
@@ -1268,13 +1268,25 @@ async function loadPrecip(){
       try{
         const url=`https://api.open-meteo.com/v1/forecast?latitude=${pt.lat}&longitude=${pt.lon}&hourly=precipitation&forecast_days=2&timezone=Europe%2FRome`;
         const d=await fj(url);
+        const times=d.hourly.time||[];
+        const pr=d.hourly.precipitation||[];
+        // Cerca l'ora corrente o la più recente disponibile
         const now=new Date();
         const pad=n=>String(n).padStart(2,'0');
         const ns=`${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:00`;
-        const idx=d.hourly.time.indexOf(ns);
-        if(idx<0) return{...pt,p3:0,p6:0,p12:0,p24:0};
-        const pr=d.hourly.precipitation||[];
-        const s=(h)=>Math.round(pr.slice(idx,idx+h).reduce((a,b)=>a+(b||0),0)*10)/10;
+        let idx=times.indexOf(ns);
+        if(idx<0){
+          // Fallback: trova l'ora più vicina nel passato
+          const nowMs=now.getTime();
+          let best=-1, bestDiff=Infinity;
+          times.forEach((t,i)=>{
+            const diff=nowMs-new Date(t).getTime();
+            if(diff>=0&&diff<bestDiff){bestDiff=diff;best=i;}
+          });
+          idx=best;
+        }
+        if(idx<0||!pr.length) return{...pt,p3:0,p6:0,p12:0,p24:0};
+        const s=(h)=>Math.round(pr.slice(idx,Math.min(idx+h,pr.length)).reduce((a,b)=>a+(b||0),0)*10)/10;
         return{...pt,p3:s(3),p6:s(6),p12:s(12),p24:s(24)};
       }catch(e){
         return{...pt,p3:0,p6:0,p12:0,p24:0};
