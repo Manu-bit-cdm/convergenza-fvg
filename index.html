@@ -310,16 +310,15 @@ function toggleLayer(name){
       var pp=document.getElementById('precipPanel');
       if(pc) pc.style.display=layerVis.pioggia?'flex':'none';
       if(pp) pp.style.display=layerVis.pioggia?'block':'none';
+      // Aggiorna cerchi mappa (mostra o nasconde)
+      if(typeof updatePrecipLayer==='function') updatePrecipLayer();
       if(layerVis.pioggia){
         if(!PRECIP_DATA){
           var el=document.getElementById('precipList');
           if(el) el.innerHTML='<div style="text-align:center;color:#475569;padding:8px;font-size:10px">⏳ Caricamento dati...</div>';
         }else{
-          if(typeof updatePrecipLayer==='function') updatePrecipLayer();
           if(typeof updatePrecipPanel==='function') updatePrecipPanel();
         }
-      }else{
-        if(PRECIP_LAYER&&LM&&LM.hasLayer(PRECIP_LAYER)) LM.removeLayer(PRECIP_LAYER);
       }
     }
     if(name==='conv'){
@@ -1191,7 +1190,7 @@ function upd(idx){
 // ═══════════════════════════════════════════════════
 let LM=null, CP=null, CP_LAG=null, CZONE=null, ZONE_LAG=null;
 let TZONE_MTN=null, TZONE_PLN=null, TZONE_CST=null, TZONE_CARSO=null;
-let ARROWS=[], RADAR_LAYER=null;
+let ARROWS=[], RADAR_LAYER=null, PRECIP_CIRCLES=[];
 
 // Poligoni zone temporali — fascia prealpina, pianura, costa, Carso/Monfalconese
 const POLY_MTN=[[46.22,12.88],[46.25,13.05],[46.20,13.42],[46.18,13.78],[46.10,13.85],[45.98,13.80],[45.92,13.48],[45.98,13.18],[46.02,12.90]];
@@ -1259,6 +1258,12 @@ function initMap(){
     color:'#F59E0B',fillColor:'#F59E0B',
     fillOpacity:0,weight:1.5,opacity:0,dashArray:'4,5'
   }).addTo(LM);
+
+  // Cerchi precipitazioni — uno per punto FVG, nascosti finché pioggia non attivo
+  PRECIP_CIRCLES=PRECIP_PTS.map(pt=>
+    L.circle([pt.lat,pt.lon],{radius:0,color:'#38BDF8',fillColor:'#38BDF8',
+      fillOpacity:0,weight:0,opacity:0}).addTo(LM)
+  );
 
   // Radar RainViewer
   loadRadar();
@@ -1442,14 +1447,27 @@ async function loadPrecip(){
 }
 
 function updatePrecipLayer(){
-  if(!PRECIP_LAYER||!PRECIP_DATA) return;
-  if(!layerVis.pioggia){if(LM.hasLayer(PRECIP_LAYER))LM.removeLayer(PRECIP_LAYER);return;}
+  if(!PRECIP_CIRCLES.length||!PRECIP_DATA) return;
   const key='p'+precipWin;
-  const heatData=PRECIP_DATA
-    .filter(d=>d[key]>0.3)
-    .map(d=>[d.lat,d.lon,Math.min(1,d[key]/35)]); // 35mm = intensità massima
-  PRECIP_LAYER.setLatLngs(heatData);
-  if(!LM.hasLayer(PRECIP_LAYER)) PRECIP_LAYER.addTo(LM);
+  PRECIP_CIRCLES.forEach((c,i)=>{
+    const pt=PRECIP_DATA[i];
+    if(!pt){c.setStyle({fillOpacity:0,opacity:0,weight:0});return;}
+    const v=pt[key]??0;
+    if(!layerVis.pioggia||v<0.5){
+      c.setStyle({fillOpacity:0,opacity:0,weight:0});
+      return;
+    }
+    // Raggio proporzionale ai mm (8-35km)
+    const r=Math.min(35000,7000+v*800);
+    // Colore per intensità
+    const col=v>=20?'#7C3AED':v>=10?'#6366F1':v>=5?'#0284C7':'#38BDF8';
+    c.setRadius(r);
+    c.setStyle({
+      color:col,fillColor:col,
+      fillOpacity:0.15+Math.min(0.25,v/100),
+      opacity:0.6,weight:1.5
+    });
+  });
 }
 
 function updatePrecipPanel(){
