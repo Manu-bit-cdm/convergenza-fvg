@@ -1320,18 +1320,21 @@ function updatePrecipPanel(){
   const el=document.getElementById('precipList');
   if(!el||!PRECIP_DATA) return;
   const key='p'+precipWin;
-  el.innerHTML=PRECIP_DATA.map(d=>{
-    const v=d[key];
-    const col=v>=20?'#DB2777':v>=10?'#7C3AED':v>=5?'#0284C7':v>=1?'#38BDF8':'#334155';
-    const bar=Math.round(Math.min(100,v/35*100));
-    return`<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #0A1018">
-      <div style="width:58px;font-size:9px;color:#64748B;flex-shrink:0">${d.name}</div>
-      <div style="flex:1;background:#05080F;border-radius:2px;height:4px;overflow:hidden">
-        <div style="width:${bar}%;height:100%;background:${col};border-radius:2px"></div>
-      </div>
-      <div style="font-size:10px;font-weight:600;color:${col};min-width:38px;text-align:right">${v>0?'~'+v+'mm':'—'}</div>
-    </div>`;
-  }).join('');
+  const total=PRECIP_DATA.reduce((a,d)=>a+(d[key]||0),0);
+  el.innerHTML=
+    `<div style="font-size:8px;color:#334155;margin-bottom:5px;text-align:right">Totale: ${total.toFixed(1)}mm · fonte Open-Meteo</div>`+
+    PRECIP_DATA.map(d=>{
+      const v=d[key]??0;
+      const col=v>=20?'#DB2777':v>=10?'#7C3AED':v>=5?'#0284C7':v>=1?'#38BDF8':'#1E3050';
+      const bar=Math.round(Math.min(100,v/35*100));
+      return`<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid #0A1018">
+        <div style="width:58px;font-size:9px;color:#64748B;flex-shrink:0">${d.name}</div>
+        <div style="flex:1;background:#05080F;border-radius:2px;height:4px;overflow:hidden">
+          <div style="width:${bar}%;height:100%;background:${col};border-radius:2px"></div>
+        </div>
+        <div style="font-size:10px;font-weight:600;color:${v>0?col:'#1E3050'};min-width:44px;text-align:right">${v>0?'~'+v+'mm':'0mm'}</div>
+      </div>`;
+    }).join('');
 }
 
 let radarVisible=true;
