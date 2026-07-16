@@ -1332,51 +1332,67 @@ async function loadRivoltoSounding(){
   if(!el) return;
   const now=new Date();
   const h=now.getHours();
-  // 12Z disponibile dopo le 14:00 locali, 00Z dopo le 03:00
   const ech=h>=14?12:h>=3?0:null;
-  if(ech===null){
-    if(tEl) tEl.textContent='Prossimo sondaggio alle 03:00';
-    el.innerHTML='<div style="color:#475569;font-size:10px;text-align:center;padding:8px">⏳ Sondaggio non ancora disponibile</div>';
-    return;
-  }
   const pad=n=>String(n).padStart(2,'0');
   const y=now.getFullYear(),m=pad(now.getMonth()+1),d=pad(now.getDate());
-  const ddhh=`${d}${pad(ech)}`;
-
-  // Tenta Wyoming via allorigins proxy
+  const ddhh=`${d}${pad(ech??12)}`;
+  const mcUrl=`https://www.meteociel.fr/obs/sondage.php?ech=${ech??12}&code=16045&dt=${y}-${m}-${d}`;
   const wyUrl=`https://weather.uwyo.edu/cgi-bin/sounding.py?TYPE=TEXT%3ALIST&YEAR=${y}&MONTH=${m}&FROM=${ddhh}&TO=${ddhh}&STNM=16045`;
-  const proxy=`https://api.allorigins.win/raw?url=${encodeURIComponent(wyUrl)}`;
-  el.innerHTML='<div style="color:#475569;font-size:10px;text-align:center;padding:8px">📡 Connessione a Wyoming...</div>';
-  try{
-    const r=await fetch(proxy,{signal:AbortSignal.timeout(12000)});
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    const txt=await r.text();
-    if(!txt.includes('CAPE')&&!txt.includes('Lifted')) throw new Error('dati assenti');
-    renderSounding(parseWyomingSounding(txt),ech);
-    return;
-  }catch(e){console.warn('Wyoming:',e.message);}
+  if(tEl) tEl.textContent=ech===12?'12Z — ore 14:00':ech===0?'00Z — ore 02:00':'non ancora disponibile';
 
-  // Fallback: Meteociel
-  const mcUrl=`https://www.meteociel.fr/obs/sondage.php?ech=${ech}&code=16045&dt=${y}-${m}-${d}`;
-  const proxy2=`https://api.allorigins.win/raw?url=${encodeURIComponent(mcUrl)}`;
-  el.innerHTML='<div style="color:#475569;font-size:10px;text-align:center;padding:8px">📡 Tentativo Meteociel...</div>';
+  // Tenta corsproxy.io
   try{
-    const r=await fetch(proxy2,{signal:AbortSignal.timeout(12000)});
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    const html=await r.text();
-    const data=parseMeteocielSounding(html);
-    if(!data.cape&&!data.li) throw new Error('dati non trovati');
-    renderSounding(data,ech);
-    return;
-  }catch(e){console.warn('Meteociel:',e.message);}
+    const proxy=`https://corsproxy.io/?${encodeURIComponent(wyUrl)}`;
+    const r=await fetch(proxy,{signal:AbortSignal.timeout(8000)});
+    if(r.ok){
+      const txt=await r.text();
+      if(txt.includes('CAPE')||txt.includes('Lifted')){
+        renderSounding(parseWyomingSounding(txt),ech??12);
+        return;
+      }
+    }
+  }catch(e){console.warn('proxy:',e.message);}
 
-  // Fallback finale: link diretto
-  if(tEl) tEl.textContent=ech===12?'12Z':'00Z';
-  el.innerHTML=`<div style="font-size:10px;color:#475569;padding:8px;text-align:center">
-    ⚠ Accesso automatico bloccato.
-    <a href="${mcUrl}" target="_blank" style="color:#06B6D4;display:block;margin-top:6px">→ Apri sondaggio su Meteociel</a>
-    <a href="${wyUrl}" target="_blank" style="color:#38BDF8;display:block;margin-top:3px">→ Apri su Wyoming Univ.</a>
-  </div>`;
+  // Fallback: form manuale + link diretti
+  el.innerHTML=`
+    <div style="font-size:9px;color:#334155;margin-bottom:10px">
+      Accesso automatico bloccato dai siti. Inserisci manualmente i valori:
+    </div>
+    <div style="display:flex;gap:6px;margin-bottom:10px">
+      <a href="${mcUrl}" target="_blank" style="flex:1;padding:5px 8px;background:#0A1422;border:1px solid #06B6D4;border-radius:6px;color:#06B6D4;font-size:10px;text-align:center;text-decoration:none">📡 Meteociel</a>
+      <a href="${wyUrl}" target="_blank" style="flex:1;padding:5px 8px;background:#0A1422;border:1px solid #334155;border-radius:6px;color:#38BDF8;font-size:10px;text-align:center;text-decoration:none">🌐 Wyoming</a>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
+      ${[['CAPE','cape','J/kg'],['LI','li',''],['CIN','cin','J/kg'],['K Index','ki',''],['PWAT','pwat','mm'],['TT','tt','']].map(([lab,id,u])=>`
+        <div style="background:#05080F;border-radius:6px;padding:6px 8px">
+          <div style="font-size:8px;color:#475569;margin-bottom:3px">${lab}${u?' ('+u+')':''}</div>
+          <input id="s_${id}" type="number" step="0.1" placeholder="--"
+            style="width:100%;background:transparent;border:none;border-bottom:1px solid #1A2E45;color:#E2E8F0;font-size:12px;font-weight:700;outline:none;padding:2px 0"
+            oninput="applySounding()">
+        </div>`).join('')}
+    </div>
+    <div id="soundingResult"></div>`;
+}
+
+function applySounding(){
+  const get=id=>{const el=document.getElementById('s_'+id);return el&&el.value!==''?parseFloat(el.value):null;};
+  const data={cape:get('cape'),li:get('li'),cin:get('cin'),ki:get('ki'),pwat:get('pwat'),tt:get('tt')};
+  const el=document.getElementById('soundingResult');
+  if(!el) return;
+  const items=[
+    {n:'CAPE',v:data.cape,u:'J/kg',c:!data.cape?'#475569':data.cape>1000?'#EF4444':data.cape>300?'#F97316':data.cape>50?'#EAB308':'#22C55E'},
+    {n:'LI',v:data.li,u:'',c:data.li==null?'#475569':data.li<-6?'#EF4444':data.li<-3?'#F97316':data.li<0?'#EAB308':'#22C55E'},
+    {n:'CIN',v:data.cin,u:'J/kg',c:data.cin==null?'#475569':Math.abs(data.cin)<50?'#22C55E':Math.abs(data.cin)<150?'#EAB308':'#EF4444'},
+    {n:'K Index',v:data.ki,u:'',c:data.ki==null?'#475569':data.ki>35?'#EF4444':data.ki>30?'#F97316':data.ki>20?'#EAB308':'#22C55E'},
+    {n:'PWAT',v:data.pwat,u:'mm',c:data.pwat==null?'#475569':data.pwat>40?'#EF4444':data.pwat>30?'#F97316':'#EAB308'},
+    {n:'TT',v:data.tt,u:'',c:data.tt==null?'#475569':data.tt>50?'#EF4444':data.tt>44?'#F97316':'#22C55E'},
+  ].filter(i=>i.v!=null);
+  if(!items.length){el.innerHTML='';return;}
+  el.innerHTML='<div style="font-size:8px;color:#22C55E;margin-bottom:6px">✓ Valori sondaggio inseriti</div>'+
+    '<div style="display:flex;flex-wrap:wrap;gap:5px">'+
+    items.map(i=>`<div style="background:#05080F;border-radius:5px;padding:4px 8px;font-size:10px">
+      <span style="color:#475569">${i.n} </span><span style="font-weight:700;color:${i.c}">${i.v.toFixed(1)}${i.u}</span>
+    </div>`).join('')+'</div>';
 }
 
 
