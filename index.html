@@ -193,10 +193,12 @@ button,.dir-btn{touch-action:manipulation;min-height:36px;cursor:pointer}
   <div id="tCard" style="background:#05080A;border-radius:12px;padding:13px;border:1px solid transparent;transition:all .3s">
     <div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:#64748B;margin-bottom:6px">⛈ Predisposizione</div>
     <div id="tScore" class="mono" style="font-size:32px;font-weight:700;line-height:1;color:#22C55E">--</div>
-    <div style="display:flex;align-items:baseline;gap:7px">
+    <div style="display:flex;align-items:baseline;gap:7px;flex-wrap:wrap">
       <div style="font-size:9px;color:#334155">/ 12 pt</div>
       <div id="tProb" style="font-size:10px;font-weight:700;color:#38BDF8">~--%</div>
+      <div id="tTrend" style="font-size:14px;color:#475569" title="Tendenza +3h">→</div>
     </div>
+    <div id="tsConf" style="font-size:9px;color:#475569;margin-top:2px"></div>
     <div style="background:#040810;border-radius:2px;height:4px;overflow:hidden;margin:8px 0">
       <div id="tBar" style="height:100%;border-radius:2px;background:linear-gradient(90deg,#22C55E,#EAB308 40%,#EF4444);transition:width .3s;width:0%"></div>
     </div>
@@ -423,9 +425,46 @@ function setPrecipModel(btn,model){
   loadPrecip();
 }
 
-// ═══════════════════════════════════════════════════
-// ANALISI SINOTTICA — rileva eventi in 48h da parametri modello
-// ═══════════════════════════════════════════════════
+// Confidenza ts basata sul consenso modelli
+function tsConfidence(ts,idx){
+  if(!D||!D.d2||!D.i2i) return null;
+  const ecC=D.cape[idx]||0;
+  const d2C=D.d2.cape[idx]||0;
+  const i2C=D.i2i.cape[idx]||0;
+  if(d2C<10&&i2C<10) return null;
+  const localAvg=(d2C+i2C)/2;
+  const ratio=ecC/(localAvg||1);
+  if(ratio>1.6&&ts>4) return{t:'⚠ ECMWF sopra i modelli locali — possibile sovrastima',c:'#EAB308'};
+  if(ratio<0.6&&localAvg>400) return{t:'📍 Modelli locali vedono più instabilità',c:'#38BDF8'};
+  if(Math.abs(ratio-1)<0.35&&ts>3) return{t:'✓ Modelli concordi',c:'#22C55E'};
+  return null;
+}
+
+// Sentinella Veneto — rileva sistemi in avvicinamento da W
+function checkSentinelEvent(idx){
+  if(!D||!D.sentinel) return null;
+  const sCape=D.sentinel.cape[idx]??0;
+  const sPrecip=D.sentinel.precip[idx]??0;
+  const sPwat=D.sentinel.pwat[idx]??0;
+  const wd5=D.wd500[idx]??270;
+  const ws5=D.ws500[idx]??0;
+  // Sistema attivo in Veneto se: CAPE > 400 O precipitazione > 0.5mm E vento verso FVG (W-NW)
+  const isMovingToFVG=(wd5>=240&&wd5<=330);
+  const hasActivity=(sCape>400||sPrecip>0.5);
+  if(!isMovingToFVG||!hasActivity) return null;
+  // Stima ore di arrivo: distanza Treviso-Udine ~120km
+  const wsKmh=(ws5||5)*3.6;
+  const arrHours=Math.round(120/Math.max(wsKmh,10));
+  return{
+    cape:Math.round(sCape),
+    precip:sPrecip.toFixed(1),
+    pwat:Math.round(sPwat),
+    arrHours,
+    wd5:Math.round(wd5)
+  };
+}
+
+
 function computeSynoptic(){
   if(!D||!D.times||!D.t850) return null;
   const events=[];
@@ -503,19 +542,29 @@ function computeSynoptic(){
   return events;
 }
 
-function renderSynoptic(){
+function renderSynoptic(idx){
   const el=document.getElementById('synopticBody');
   if(!el) return;
+
+  // Verifica sentinella Veneto
+  const sent=checkSentinelEvent(idx??0);
+  let sentHtml='';
+  if(sent){
+    sentHtml=`<div style="background:#0C0900;border:1px solid #F97316;border-radius:8px;padding:8px 10px;margin-bottom:10px">
+      <div style="font-size:11px;font-weight:700;color:#F97316;margin-bottom:4px">⚡ Sistema attivo in Veneto — arrivo FVG stimato ~${sent.arrHours}h</div>
+      <div style="font-size:9px;color:#64748B">CAPE ${sent.cape} J/kg · Precip ${sent.precip}mm/h · Flusso ${sent.wd5}° verso FVG</div>
+    </div>`;
+  }
+
   const events=computeSynoptic();
-  if(!events){el.innerHTML='<div style="text-align:center;padding:12px;color:#475569;font-size:10px">⏳ Dati non ancora disponibili</div>';return;}
+  if(!events){el.innerHTML=sentHtml+'<div style="text-align:center;padding:12px;color:#475569;font-size:10px">⏳ Dati non ancora disponibili</div>';return;}
   if(!events.length){
-    el.innerHTML='<div style="padding:10px;font-size:11px;color:#22C55E;text-align:center">✅ Nessun evento sinottico rilevante nelle prossime 48 ore — condizioni stabili</div>';
+    el.innerHTML=sentHtml+'<div style="padding:10px;font-size:11px;color:#22C55E;text-align:center">✅ Nessun evento sinottico rilevante nelle prossime 48 ore</div>';
     return;
   }
   const typeCol={fronte_freddo:'#38BDF8',fronte_caldo:'#F97316',post_frontale:'#EF4444',prefrontale:'#EAB308',anticiclone:'#22C55E',convezione_termica:'#F59E0B',stabile:'#475569'};
-  el.innerHTML=events.map(ev=>{
+  el.innerHTML=sentHtml+events.map(ev=>{
     const col=typeCol[ev.type]||'#64748B';
-    // Format time
     const dt=new Date(ev.t);
     const gg=['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][dt.getDay()];
     const hh=String(dt.getHours()).padStart(2,'0');
@@ -549,6 +598,7 @@ const LAT=46.06,  LON=13.24;          // Udine/FVG centrale
 const LAT_A=46.62,LON_A=14.31;        // Carinzia (ΔP MSLP)
 const LAT_G=45.68,LON_G=13.40;        // Grado (SST)
 const LAT_ISO=45.95,LON_ISO=13.55;    // Gorizia/Isonzo — punto orientale FVG per ΔWD convergenza
+const LAT_SV=45.67,LON_SV=12.24;      // Sentinella Veneto (Treviso) — sistemi da W
 
 // ─── 8 punti precipitazioni FVG ────────────────────
 const PRECIP_PTS=[
@@ -556,7 +606,6 @@ const PRECIP_PTS=[
   {name:'Tarcento',  lat:46.21,lon:13.22},
   {name:'Udine',     lat:46.06,lon:13.23},
   {name:'Cividale',  lat:46.10,lon:13.43},
-  {name:'Pordenone', lat:45.96,lon:12.66},
   {name:'Palmanova', lat:45.90,lon:13.31},
   {name:'Gorizia',   lat:45.94,lon:13.62},
   {name:'Grado',     lat:45.68,lon:13.40},
@@ -620,7 +669,7 @@ async function loadAll(){
   setSt('load','Caricamento dati meteo...');
   try{
     // Chiamata primaria senza modello — Open-Meteo usa il miglior dato disponibile per la zona
-    const [ec,d2,eu,at,ma,iso,i2i,ch2]=await Promise.all([
+    const [ec,d2,eu,at,ma,iso,i2i,ch2,sentV]=await Promise.all([
       fj(aurl(LAT,LON,'',PRI)),
       fj(aurl(LAT,LON,'icon_d2',CMP)).catch(e=>{console.warn('ICON-D2:',e.message);return null;}),
       fj(aurl(LAT,LON,'icon_eu',CMP)).catch(e=>{console.warn('ICON-EU:',e.message);return null;}),
@@ -631,6 +680,8 @@ async function loadAll(){
       // Modelli ad area limitata per l'Italia
       fj(aurl(LAT,LON,'italia_meteo_arpae_icon_2i',CMP)).catch(e=>{console.warn('ICON-2I:',e.message);return null;}),
       fj(aurl(LAT,LON,'meteoswiss_icon_ch2',CMP)).catch(e=>{console.warn('CH2:',e.message);return null;}),
+      // Sentinella Veneto — sistemi temporaleschi in avvicinamento da W
+      fj(aurl(LAT_SV,LON_SV,'','cape,precipitation,total_column_integrated_water_vapour')).catch(e=>{console.warn('SentV:',e.message);return null;}),
     ]);
 
       // Confronto ECMWF IFS025 (secondario, non blocca)
@@ -671,6 +722,8 @@ async function loadAll(){
       eu:eu?{cape:sl(eu.hourly.cape),pwat:sl(eu.hourly.total_column_integrated_water_vapour),t850:sl(eu.hourly.temperature_850hPa)}:null,
       i2i:i2i?{cape:sl(i2i.hourly.cape),pwat:sl(i2i.hourly.total_column_integrated_water_vapour),t850:sl(i2i.hourly.temperature_850hPa)}:null,
       ch2:ch2?{cape:sl(ch2.hourly.cape),pwat:sl(ch2.hourly.total_column_integrated_water_vapour),t850:sl(ch2.hourly.temperature_850hPa)}:null,
+      // Sentinella Veneto
+      sentinel:sentV?{cape:sl(sentV.hourly.cape),precip:sl(sentV.hourly.precipitation),pwat:sl(sentV.hourly.total_column_integrated_water_vapour)}:null,
     };
 
     document.getElementById('tl0').textContent=ftl(D.times[0]);
@@ -1187,8 +1240,26 @@ function upd(idx){
 
   // Map update
   updMap(p,risk);
-  // Analisi sinottica
-  renderSynoptic();
+  // Analisi sinottica con idx per sentinella
+  renderSynoptic(idx);
+
+  // ─── Frecce tendenza +3h ───────────────────────────
+  const p3h=params(Math.min(idx+3,D.times.length-1));
+  if(p3h){
+    const delta=p3h.ts-p.ts;
+    const tTr=document.getElementById('tTrend');
+    if(tTr){
+      tTr.textContent=delta>2?'↑':delta<-2?'↓':'→';
+      tTr.style.color=delta>2?'#EF4444':delta<-2?'#22C55E':'#475569';
+      tTr.title=`Tendenza +3h: ts ${delta>0?'+':''}${delta.toFixed(0)}`;
+    }
+  }
+
+  // ─── Badge consenso modelli ──────────────────────────
+  const conf=tsConfidence(p.ts,idx);
+  const confEl=document.getElementById('tsConf');
+  if(confEl) confEl.innerHTML=conf?`<span style="color:${conf.c}">${conf.t}</span>`:'';
+
 
   // SST on map
   if(D.sst[idx]!=null){
