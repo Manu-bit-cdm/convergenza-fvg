@@ -58,6 +58,8 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:24px;heigh
 button,.dir-btn{touch-action:manipulation;min-height:36px;cursor:pointer}
 .tab-btn{flex:1;padding:8px 4px;border-radius:8px;border:1px solid #1A2E45;font-size:11px;font-weight:700;cursor:pointer;touch-action:manipulation;background:#0A1422;color:#475569;transition:all .2s;letter-spacing:.5px}
 .tab-btn.active{background:#0E2847;color:#06B6D4;border-color:#06B6D4}
+.mbtn{padding:3px 8px;border-radius:5px;border:1px solid #1A2E45;font-size:9px;cursor:pointer;touch-action:manipulation;background:#0A1422;color:#475569;transition:all .15s}
+.mbtn.active{background:#0E2847;color:#06B6D4;border-color:#06B6D4;font-weight:700}
 
 /* ── LAYOUT SEMPLICE — colonna unica, tutto scorre ── */
 #desktopGrid{display:block}
@@ -158,12 +160,23 @@ button,.dir-btn{touch-action:manipulation;min-height:36px;cursor:pointer}
       🌧 Pioggia</button>
   </div>
   <!-- Selettore finestra temporale (visibile solo con pioggia attivo) -->
-  <div id="precipCtrl" style="display:none;align-items:center;gap:5px;margin-bottom:6px">
-    <span style="font-size:9px;color:#64748B;flex-shrink:0">Accumulo previsto:</span>
-    <button class="tbtn" data-h="3"  onclick="setPrecipWindow(3)"  style="padding:3px 9px;border-radius:5px;border:1px solid #1A2E45;font-size:10px;cursor:pointer;background:#0A1422;color:#475569">3h</button>
-    <button class="tbtn" data-h="6"  onclick="setPrecipWindow(6)"  style="padding:3px 9px;border-radius:5px;border:1px solid #1A2E45;font-size:10px;cursor:pointer;background:#1A2E45;color:#06B6D4">6h</button>
-    <button class="tbtn" data-h="12" onclick="setPrecipWindow(12)" style="padding:3px 9px;border-radius:5px;border:1px solid #1A2E45;font-size:10px;cursor:pointer;background:#0A1422;color:#475569">12h</button>
-    <button class="tbtn" data-h="24" onclick="setPrecipWindow(24)" style="padding:3px 9px;border-radius:5px;border:1px solid #1A2E45;font-size:10px;cursor:pointer;background:#0A1422;color:#475569">24h</button>
+  <div id="precipCtrl" style="display:none;flex-direction:column;gap:5px;margin-bottom:6px">
+    <!-- Selettore modello -->
+    <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+      <span style="font-size:9px;color:#64748B;flex-shrink:0">Modello:</span>
+      <button class="mbtn active" onclick="setPrecipModel(this,'')">Best-mix</button>
+      <button class="mbtn" onclick="setPrecipModel(this,'icon_d2')">ICON-D2</button>
+      <button class="mbtn" onclick="setPrecipModel(this,'italia_meteo_arpae_icon_2i')">ICON-2I 🇮🇹</button>
+      <button class="mbtn" onclick="setPrecipModel(this,'icon_eu')">ICON-EU</button>
+    </div>
+    <!-- Selettore finestra temporale -->
+    <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+      <span style="font-size:9px;color:#64748B;flex-shrink:0">Accumulo:</span>
+      <button class="tbtn" data-h="3"  onclick="setPrecipWindow(3)"  style="padding:3px 9px;border-radius:5px;border:1px solid #1A2E45;font-size:10px;cursor:pointer;background:#0A1422;color:#475569">3h</button>
+      <button class="tbtn" data-h="6"  onclick="setPrecipWindow(6)"  style="padding:3px 9px;border-radius:5px;border:1px solid #1A2E45;font-size:10px;cursor:pointer;background:#1A2E45;color:#06B6D4">6h</button>
+      <button class="tbtn" data-h="12" onclick="setPrecipWindow(12)" style="padding:3px 9px;border-radius:5px;border:1px solid #1A2E45;font-size:10px;cursor:pointer;background:#0A1422;color:#475569">12h</button>
+      <button class="tbtn" data-h="24" onclick="setPrecipWindow(24)" style="padding:3px 9px;border-radius:5px;border:1px solid #1A2E45;font-size:10px;cursor:pointer;background:#0A1422;color:#475569">24h</button>
+    </div>
   </div>
   <!-- Pannello valori precipitazione per punto (visibile solo con pioggia attivo) -->
   <div id="precipPanel" style="display:none;background:#0A1422;border:1px solid #1A2E45;border-radius:10px;padding:10px 12px;font-size:9px">
@@ -235,7 +248,13 @@ button,.dir-btn{touch-action:manipulation;min-height:36px;cursor:pointer}
   <div id="ckres" style="margin-top:10px;padding:9px 12px;border-radius:6px;font-size:12px;font-weight:600;text-align:center;border:1px solid transparent"></div>
 </div>
 
+<!-- ANALISI SINOTTICA 48h -->
+<div class="sc" id="synopticCard" style="margin-bottom:11px">
+  <div style="font-size:9px;color:#06B6D4;letter-spacing:2px;text-transform:uppercase;margin-bottom:10px">🌪️ Analisi Sinottica — prossime 48 ore</div>
+  <div id="synopticBody"><div style="text-align:center;padding:12px;color:#475569;font-size:10px">⏳ Caricamento dati...</div></div>
 </div>
+
+</div><!-- chiude pageMonitor -->
 
 <!-- PAGINA ANALISI -->
 <div id="pageAnalisi" style="display:none">
@@ -394,6 +413,125 @@ function renderLocalModels(idx){
   }).join('');
 }
 
+function setPrecipModel(btn,model){
+  precipModel=model;
+  document.querySelectorAll('.mbtn').forEach(function(b){
+    b.classList.remove('active');
+  });
+  if(btn) btn.classList.add('active');
+  PRECIP_DATA=null; // forza reload
+  loadPrecip();
+}
+
+// ═══════════════════════════════════════════════════
+// ANALISI SINOTTICA — rileva eventi in 48h da parametri modello
+// ═══════════════════════════════════════════════════
+function computeSynoptic(){
+  if(!D||!D.times||!D.t850) return null;
+  const events=[];
+  const N=Math.min(D.times.length,48);
+
+  // Stato iniziale
+  let lastType=null;
+
+  for(let i=0;i<N-6;i+=3){
+    const t=D.times[i];
+    if(!t) continue;
+
+    // Valori correnti
+    const t850=D.t850[i]??15;
+    const z500=D.z500[i]?D.z500[i]/10:575; // dam
+    const wd5=D.wd500[i]??270;
+    const ws5=D.ws500[i]??0;
+    const pwat=D.pwat[i]??30;
+    const cape=D.cape[i]??0;
+    const mslp=D.mslp[i]??101300;
+    const shr=shear(D.ws850[i],D.wd850[i],ws5,wd5);
+
+    // Variazioni a +6h
+    const j=Math.min(i+6,N-1);
+    const dt850=(D.t850[j]??t850)-t850;
+    const dpwat=(D.pwat[j]??pwat)-pwat;
+    const dmslp=((D.mslp[j]??mslp)-mslp)/100; // hPa
+    const dz500=D.z500[j]?(D.z500[j]/10-z500):0;
+
+    // Classificazione regime
+    let type='stabile',icon='☀️',label='',detail='';
+
+    const isNW=wd5>=280&&wd5<=360;
+    const isWSW=wd5>=200&&wd5<=280;
+    const isSE=wd5>=100&&wd5<=200;
+
+    if(dt850<-3&&shr>35&&isNW){
+      type='fronte_freddo';icon='❄️';
+      label='Passaggio fronte freddo';
+      detail=`T850 ${dt850.toFixed(1)}°C/6h · Shear ${Math.round(shr)}km/h · Flusso NW`;
+    } else if(dpwat>4&&dmslp<-1&&isSE){
+      type='fronte_caldo';icon='🌧';
+      label='Fronte caldo / Occluso in avvicinamento';
+      detail=`PWAT +${dpwat.toFixed(0)}mm · ΔP ${dmslp.toFixed(1)}hPa · Flusso SE`;
+    } else if(t850<9&&isNW&&cape>100){
+      type='post_frontale';icon='⛈';
+      label='Instabilità post-frontale';
+      detail=`T850 ${t850.toFixed(1)}°C · CAPE ${Math.round(cape)} J/kg · NW`;
+    } else if(isWSW&&shr>40&&dpwat>2){
+      type='prefrontale';icon='☁️';
+      label='Atmosfera prefrontale';
+      detail=`Shear ${Math.round(shr)}km/h · Flusso SW · PWAT ${Math.round(pwat)}mm`;
+    } else if(z500>582&&dmslp>0.5){
+      type='anticiclone';icon='🌤️';
+      label='Rinforzo anticiclonico';
+      detail=`Z500 ${Math.round(z500)} dam · ΔP +${dmslp.toFixed(1)}hPa`;
+    } else if(cape>600&&shr<25){
+      type='convezione_termica';icon='⚡';
+      label='Predisposizione convezione termica';
+      detail=`CAPE ${Math.round(cape)} J/kg · Shear basso`;
+    } else {
+      type='stabile';
+    }
+
+    // Aggiungi solo quando cambia il regime
+    if(type!=='stabile'&&type!==lastType){
+      events.push({t,icon,label,detail,type});
+      lastType=type;
+    } else if(type==='stabile'&&lastType!==null&&lastType!=='stabile'){
+      events.push({t,icon:'✅',label:'Ritorno a condizioni stabili',detail:'',type:'stabile'});
+      lastType='stabile';
+    }
+  }
+
+  return events;
+}
+
+function renderSynoptic(){
+  const el=document.getElementById('synopticBody');
+  if(!el) return;
+  const events=computeSynoptic();
+  if(!events){el.innerHTML='<div style="text-align:center;padding:12px;color:#475569;font-size:10px">⏳ Dati non ancora disponibili</div>';return;}
+  if(!events.length){
+    el.innerHTML='<div style="padding:10px;font-size:11px;color:#22C55E;text-align:center">✅ Nessun evento sinottico rilevante nelle prossime 48 ore — condizioni stabili</div>';
+    return;
+  }
+  const typeCol={fronte_freddo:'#38BDF8',fronte_caldo:'#F97316',post_frontale:'#EF4444',prefrontale:'#EAB308',anticiclone:'#22C55E',convezione_termica:'#F59E0B',stabile:'#475569'};
+  el.innerHTML=events.map(ev=>{
+    const col=typeCol[ev.type]||'#64748B';
+    // Format time
+    const dt=new Date(ev.t);
+    const gg=['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][dt.getDay()];
+    const hh=String(dt.getHours()).padStart(2,'0');
+    return`<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid #0A1018;align-items:flex-start">
+      <div style="flex-shrink:0;text-align:center;min-width:52px">
+        <div style="font-size:16px">${ev.icon}</div>
+        <div style="font-size:8px;color:#334155;margin-top:2px">${gg} ${hh}:00</div>
+      </div>
+      <div style="min-width:0">
+        <div style="font-size:11px;font-weight:700;color:${col};margin-bottom:2px">${ev.label}</div>
+        <div style="font-size:9px;color:#475569;line-height:1.4">${ev.detail}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 function setPrecipWindow(h){
   precipWin=h;
   document.querySelectorAll('.tbtn').forEach(function(b){
@@ -415,6 +553,7 @@ const LAT_ISO=45.95,LON_ISO=13.55;    // Gorizia/Isonzo — punto orientale FVG 
 // ─── 8 punti precipitazioni FVG ────────────────────
 const PRECIP_PTS=[
   {name:'Gemona',    lat:46.27,lon:13.13},
+  {name:'Tarcento',  lat:46.21,lon:13.22},
   {name:'Udine',     lat:46.06,lon:13.23},
   {name:'Cividale',  lat:46.10,lon:13.43},
   {name:'Pordenone', lat:45.96,lon:12.66},
@@ -423,6 +562,7 @@ const PRECIP_PTS=[
   {name:'Grado',     lat:45.68,lon:13.40},
   {name:'Marano',    lat:45.77,lon:13.17},
 ];
+var precipModel='';
 
 // ═══════════════════════════════════════════════════
 // STATE
@@ -1047,6 +1187,8 @@ function upd(idx){
 
   // Map update
   updMap(p,risk);
+  // Analisi sinottica
+  renderSynoptic();
 
   // SST on map
   if(D.sst[idx]!=null){
@@ -1407,7 +1549,8 @@ async function loadPrecip(){
     // Solo best-mix (no AROME): più veloce e affidabile su mobile
     const fetchPt=async(pt)=>{
       try{
-        const url=`https://api.open-meteo.com/v1/forecast?latitude=${pt.lat}&longitude=${pt.lon}&hourly=precipitation&forecast_days=2&timezone=Europe%2FRome`;
+        const modelParam=precipModel?`&models=${precipModel}`:'';
+        const url=`https://api.open-meteo.com/v1/forecast?latitude=${pt.lat}&longitude=${pt.lon}&hourly=precipitation${modelParam}&forecast_days=2&timezone=Europe%2FRome`;
         const d=await fj(url);
         const times=d.hourly.time||[];
         const pr=d.hourly.precipitation||[];
