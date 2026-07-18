@@ -441,6 +441,10 @@ function tsConfidence(ts,idx){
 }
 
 // Sentinella Veneto — rileva sistemi in avvicinamento da W
+// Verifica non solo l'esistenza del sistema ma la sua capacità di sopravvivere fino al FVG:
+// - Shear organizzato (altrimenti la cella si isola e si sfalda avvicinandosi)
+// - Traiettoria vettoriale realmente puntata su FVG (non genericamente "verso est" —
+//   spesso i sistemi veneti scendono verso bassa pianura/Adriatico seguendo lo shear)
 function checkSentinelEvent(idx){
   if(!D||!D.sentinel) return null;
   const sCape=D.sentinel.cape[idx]??0;
@@ -448,19 +452,48 @@ function checkSentinelEvent(idx){
   const sPwat=D.sentinel.pwat[idx]??0;
   const wd5=D.wd500[idx]??270;
   const ws5=D.ws500[idx]??0;
-  // Sistema attivo in Veneto se: CAPE > 400 O precipitazione > 0.5mm E vento verso FVG (W-NW)
-  const isMovingToFVG=(wd5>=240&&wd5<=330);
+  const shr=shear(D.ws850?.[idx],D.wd850?.[idx],ws5,wd5);
+
   const hasActivity=(sCape>400||sPrecip>0.5);
-  if(!isMovingToFVG||!hasActivity) return null;
-  // Stima ore di arrivo: distanza Treviso-Udine ~120km
+  if(!hasActivity) return null;
+
+  // Traiettoria: il vento medio 500hPa deve puntare specificamente verso FVG (WSW-W, 250-300°)
+  // non genericamente "verso est" — 240-330° include traiettorie che portano verso il Veneto stesso
+  const trajectToFVG=(wd5>=250&&wd5<=300);
+
+  // Shear insufficiente = sistema probabilmente termico isolato, si sfalda avanzando
+  const shearOK=shr>=25;
+
+  if(!trajectToFVG||!shearOK){
+    // Sistema attivo ma non in condizione di raggiungere il FVG organizzato
+    return{
+      cape:Math.round(sCape),precip:sPrecip.toFixed(1),pwat:Math.round(sPwat),
+      arrHours:null,wd5:Math.round(wd5),shr:Math.round(shr),
+      weak:true, // segnala che probabilmente si sfalda o devia
+      reason:'deviazione'
+    };
+  }
+
+  // Downstream starvation: il sistema in Veneto consuma l'instabilità dell'aria
+  // che lo alimenta. Se il FVG stesso ha poca energia propria, l'aria che arriva
+  // è già "consumata" e il sistema si dissolve avvicinandosi, anche con shear e
+  // traiettoria favorevoli.
+  const fvgCape=D.cape[idx]??0;
+  const fvgCin=D.cin?.[idx]??0;
+  if(fvgCape<200){
+    return{
+      cape:Math.round(sCape),precip:sPrecip.toFixed(1),pwat:Math.round(sPwat),
+      arrHours:null,wd5:Math.round(wd5),shr:Math.round(shr),
+      weak:true,reason:'starvation',fvgCape:Math.round(fvgCape)
+    };
+  }
+
   const wsKmh=(ws5||5)*3.6;
   const arrHours=Math.round(120/Math.max(wsKmh,10));
   return{
-    cape:Math.round(sCape),
-    precip:sPrecip.toFixed(1),
-    pwat:Math.round(sPwat),
-    arrHours,
-    wd5:Math.round(wd5)
+    cape:Math.round(sCape),precip:sPrecip.toFixed(1),pwat:Math.round(sPwat),
+    arrHours,wd5:Math.round(wd5),shr:Math.round(shr),weak:false,
+    fvgCape:Math.round(fvgCape),fvgCin:Math.round(fvgCin)
   };
 }
 
@@ -549,10 +582,20 @@ function renderSynoptic(idx){
   // Verifica sentinella Veneto
   const sent=checkSentinelEvent(idx??0);
   let sentHtml='';
-  if(sent){
+  if(sent&&sent.weak&&sent.reason==='starvation'){
+    sentHtml=`<div style="background:#0A0A00;border:1px solid #475569;border-radius:8px;padding:8px 10px;margin-bottom:10px">
+      <div style="font-size:10px;font-weight:700;color:#94A3B8;margin-bottom:4px">☁️ Attività in Veneto — probabile dissipazione avvicinandosi</div>
+      <div style="font-size:9px;color:#475569">CAPE Veneto ${sent.cape} J/kg ma FVG solo ${sent.fvgCape} J/kg — l'aria in arrivo è già "consumata" energeticamente dal sistema a monte (downstream starvation)</div>
+    </div>`;
+  } else if(sent&&sent.weak&&sent.reason==='deviazione'){
+    sentHtml=`<div style="background:#0A0A00;border:1px solid #475569;border-radius:8px;padding:8px 10px;margin-bottom:10px">
+      <div style="font-size:10px;font-weight:700;color:#94A3B8;margin-bottom:4px">☁️ Attività in Veneto — traiettoria/shear non favorevoli per il FVG</div>
+      <div style="font-size:9px;color:#475569">CAPE ${sent.cape} J/kg · Shear ${sent.shr}km/h · Flusso ${sent.wd5}° — probabile deviazione verso bassa pianura/Adriatico (comportamento tipo supercella right-moving)</div>
+    </div>`;
+  } else if(sent&&!sent.weak){
     sentHtml=`<div style="background:#0C0900;border:1px solid #F97316;border-radius:8px;padding:8px 10px;margin-bottom:10px">
-      <div style="font-size:11px;font-weight:700;color:#F97316;margin-bottom:4px">⚡ Sistema attivo in Veneto — arrivo FVG stimato ~${sent.arrHours}h</div>
-      <div style="font-size:9px;color:#64748B">CAPE ${sent.cape} J/kg · Precip ${sent.precip}mm/h · Flusso ${sent.wd5}° verso FVG</div>
+      <div style="font-size:11px;font-weight:700;color:#F97316;margin-bottom:4px">⚡ Sistema organizzato in Veneto — arrivo FVG stimato ~${sent.arrHours}h</div>
+      <div style="font-size:9px;color:#64748B">CAPE ${sent.cape} J/kg · FVG ha ${sent.fvgCape} J/kg propri (sufficiente a sostenere) · Shear ${sent.shr}km/h · Traiettoria diretta</div>
     </div>`;
   }
 
