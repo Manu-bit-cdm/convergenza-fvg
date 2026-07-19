@@ -446,10 +446,19 @@ function tsConfidence(ts,idx){
 // - Traiettoria vettoriale realmente puntata su FVG (non genericamente "verso est" —
 //   spesso i sistemi veneti scendono verso bassa pianura/Adriatico seguendo lo shear)
 function checkSentinelEvent(idx){
-  if(!D||!D.sentinel) return null;
-  const sCape=D.sentinel.cape[idx]??0;
-  const sPrecip=D.sentinel.precip[idx]??0;
-  const sPwat=D.sentinel.pwat[idx]??0;
+  if(!D||(!D.sentinel&&!D.sentinel2)) return null;
+
+  // Confronta i due punti sentinella (pianura Treviso + pedemontana Vittorio Veneto)
+  // e usa quello con maggiore attività convettiva — con NW la pedemontana è spesso più rappresentativa
+  const s1=D.sentinel?{cape:D.sentinel.cape[idx]??0,precip:D.sentinel.precip[idx]??0,pwat:D.sentinel.pwat[idx]??0,loc:'Treviso (pianura)'}:null;
+  const s2=D.sentinel2?{cape:D.sentinel2.cape[idx]??0,precip:D.sentinel2.precip[idx]??0,pwat:D.sentinel2.pwat[idx]??0,loc:'Vittorio Veneto (pedemontana)'}:null;
+
+  let sel=null;
+  if(s1&&s2) sel=(s2.cape+s2.precip*50)>=(s1.cape+s1.precip*50)?s2:s1;
+  else sel=s2||s1;
+  if(!sel) return null;
+
+  const sCape=sel.cape, sPrecip=sel.precip, sPwat=sel.pwat, srcLoc=sel.loc;
   const wd5=D.wd500[idx]??270;
   const ws5=D.ws500[idx]??0;
   const shr=shear(D.ws850?.[idx],D.wd850?.[idx],ws5,wd5);
@@ -470,7 +479,7 @@ function checkSentinelEvent(idx){
       cape:Math.round(sCape),precip:sPrecip.toFixed(1),pwat:Math.round(sPwat),
       arrHours:null,wd5:Math.round(wd5),shr:Math.round(shr),
       weak:true, // segnala che probabilmente si sfalda o devia
-      reason:'deviazione'
+      reason:'deviazione',srcLoc
     };
   }
 
@@ -484,16 +493,17 @@ function checkSentinelEvent(idx){
     return{
       cape:Math.round(sCape),precip:sPrecip.toFixed(1),pwat:Math.round(sPwat),
       arrHours:null,wd5:Math.round(wd5),shr:Math.round(shr),
-      weak:true,reason:'starvation',fvgCape:Math.round(fvgCape)
+      weak:true,reason:'starvation',fvgCape:Math.round(fvgCape),srcLoc
     };
   }
 
-  const wsKmh=(ws5||5)*3.6;
+  // ws5 è già in km/h (unità default Open-Meteo, nessuna conversione necessaria)
+  const wsKmh=ws5||5;
   const arrHours=Math.round(120/Math.max(wsKmh,10));
   return{
     cape:Math.round(sCape),precip:sPrecip.toFixed(1),pwat:Math.round(sPwat),
     arrHours,wd5:Math.round(wd5),shr:Math.round(shr),weak:false,
-    fvgCape:Math.round(fvgCape),fvgCin:Math.round(fvgCin)
+    fvgCape:Math.round(fvgCape),fvgCin:Math.round(fvgCin),srcLoc
   };
 }
 
@@ -584,17 +594,17 @@ function renderSynoptic(idx){
   let sentHtml='';
   if(sent&&sent.weak&&sent.reason==='starvation'){
     sentHtml=`<div style="background:#0A0A00;border:1px solid #475569;border-radius:8px;padding:8px 10px;margin-bottom:10px">
-      <div style="font-size:10px;font-weight:700;color:#94A3B8;margin-bottom:4px">☁️ Attività in Veneto — probabile dissipazione avvicinandosi</div>
-      <div style="font-size:9px;color:#475569">CAPE Veneto ${sent.cape} J/kg ma FVG solo ${sent.fvgCape} J/kg — l'aria in arrivo è già "consumata" energeticamente dal sistema a monte (downstream starvation)</div>
+      <div style="font-size:10px;font-weight:700;color:#94A3B8;margin-bottom:4px">☁️ Attività ${sent.srcLoc||'in Veneto'} — probabile dissipazione avvicinandosi</div>
+      <div style="font-size:9px;color:#475569">CAPE ${sent.cape} J/kg ma FVG solo ${sent.fvgCape} J/kg — l'aria in arrivo è già "consumata" energeticamente dal sistema a monte (downstream starvation)</div>
     </div>`;
   } else if(sent&&sent.weak&&sent.reason==='deviazione'){
     sentHtml=`<div style="background:#0A0A00;border:1px solid #475569;border-radius:8px;padding:8px 10px;margin-bottom:10px">
-      <div style="font-size:10px;font-weight:700;color:#94A3B8;margin-bottom:4px">☁️ Attività in Veneto — traiettoria/shear non favorevoli per il FVG</div>
+      <div style="font-size:10px;font-weight:700;color:#94A3B8;margin-bottom:4px">☁️ Attività ${sent.srcLoc||'in Veneto'} — traiettoria/shear non favorevoli per il FVG</div>
       <div style="font-size:9px;color:#475569">CAPE ${sent.cape} J/kg · Shear ${sent.shr}km/h · Flusso ${sent.wd5}° — probabile deviazione verso bassa pianura/Adriatico (comportamento tipo supercella right-moving)</div>
     </div>`;
   } else if(sent&&!sent.weak){
     sentHtml=`<div style="background:#0C0900;border:1px solid #F97316;border-radius:8px;padding:8px 10px;margin-bottom:10px">
-      <div style="font-size:11px;font-weight:700;color:#F97316;margin-bottom:4px">⚡ Sistema organizzato in Veneto — arrivo FVG stimato ~${sent.arrHours}h</div>
+      <div style="font-size:11px;font-weight:700;color:#F97316;margin-bottom:4px">⚡ Sistema organizzato ${sent.srcLoc||'in Veneto'} — arrivo FVG stimato ~${sent.arrHours}h</div>
       <div style="font-size:9px;color:#64748B">CAPE ${sent.cape} J/kg · FVG ha ${sent.fvgCape} J/kg propri (sufficiente a sostenere) · Shear ${sent.shr}km/h · Traiettoria diretta</div>
     </div>`;
   }
@@ -641,7 +651,8 @@ const LAT=46.06,  LON=13.24;          // Udine/FVG centrale
 const LAT_A=46.62,LON_A=14.31;        // Carinzia (ΔP MSLP)
 const LAT_G=45.68,LON_G=13.40;        // Grado (SST)
 const LAT_ISO=45.95,LON_ISO=13.55;    // Gorizia/Isonzo — punto orientale FVG per ΔWD convergenza
-const LAT_SV=45.67,LON_SV=12.24;      // Sentinella Veneto (Treviso) — sistemi da W
+const LAT_SV=45.67,LON_SV=12.24;      // Sentinella Veneto pianura (Treviso) — sistemi da W bassa quota
+const LAT_SV2=46.07,LON_SV2=12.30;    // Sentinella Veneto pedemontana (Vittorio Veneto) — stessa fascia orografica del FVG
 
 // ─── 8 punti precipitazioni FVG ────────────────────
 const PRECIP_PTS=[
@@ -712,7 +723,7 @@ async function loadAll(){
   setSt('load','Caricamento dati meteo...');
   try{
     // Chiamata primaria senza modello — Open-Meteo usa il miglior dato disponibile per la zona
-    const [ec,d2,eu,at,ma,iso,i2i,ch2,sentV]=await Promise.all([
+    const [ec,d2,eu,at,ma,iso,i2i,ch2,sentV,sentV2]=await Promise.all([
       fj(aurl(LAT,LON,'',PRI)),
       fj(aurl(LAT,LON,'icon_d2',CMP)).catch(e=>{console.warn('ICON-D2:',e.message);return null;}),
       fj(aurl(LAT,LON,'icon_eu',CMP)).catch(e=>{console.warn('ICON-EU:',e.message);return null;}),
@@ -723,8 +734,10 @@ async function loadAll(){
       // Modelli ad area limitata per l'Italia
       fj(aurl(LAT,LON,'italia_meteo_arpae_icon_2i',CMP)).catch(e=>{console.warn('ICON-2I:',e.message);return null;}),
       fj(aurl(LAT,LON,'meteoswiss_icon_ch2',CMP)).catch(e=>{console.warn('CH2:',e.message);return null;}),
-      // Sentinella Veneto — sistemi temporaleschi in avvicinamento da W
+      // Sentinella Veneto pianura (Treviso) — sistemi temporaleschi in avvicinamento da W
       fj(aurl(LAT_SV,LON_SV,'','cape,precipitation,total_column_integrated_water_vapour')).catch(e=>{console.warn('SentV:',e.message);return null;}),
+      // Sentinella Veneto pedemontana (Vittorio Veneto) — stessa fascia orografica del FVG
+      fj(aurl(LAT_SV2,LON_SV2,'','cape,precipitation,total_column_integrated_water_vapour')).catch(e=>{console.warn('SentV2:',e.message);return null;}),
     ]);
 
       // Confronto ECMWF IFS025 (secondario, non blocca)
@@ -767,6 +780,7 @@ async function loadAll(){
       ch2:ch2?{cape:sl(ch2.hourly.cape),pwat:sl(ch2.hourly.total_column_integrated_water_vapour),t850:sl(ch2.hourly.temperature_850hPa)}:null,
       // Sentinella Veneto
       sentinel:sentV?{cape:sl(sentV.hourly.cape),precip:sl(sentV.hourly.precipitation),pwat:sl(sentV.hourly.total_column_integrated_water_vapour)}:null,
+      sentinel2:sentV2?{cape:sl(sentV2.hourly.cape),precip:sl(sentV2.hourly.precipitation),pwat:sl(sentV2.hourly.total_column_integrated_water_vapour)}:null,
     };
 
     document.getElementById('tl0').textContent=ftl(D.times[0]);
