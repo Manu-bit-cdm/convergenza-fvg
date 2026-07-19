@@ -995,7 +995,27 @@ function params(i){
   const wd5v=D.wd500[i]??270;
   const northFlow=(wd5v>=320||wd5v<60);
   const rainShadow=!kiSuppressed&&northFlow&&z5dam!=null&&z5dam>576&&z5dam<588;
-  const ts=rainShadow?Math.max(0,ts_z-1):ts_z;
+  const ts_shadow=rainShadow?Math.max(0,ts_z-1):ts_z;
+
+  // Penalità disaccordo modelli — indipendente dal bypass K Index
+  // Se ECMWF vede molta più energia dei modelli locali (D2/2I a 2km, più
+  // affidabili per il FVG), il ts va ridotto: l'alto K Index da solo non
+  // basta a giustificare score pieno se il consenso è basso e sfavorevole.
+  // Calibrato su evento 19/07/2026: CAPE=990, CIN=-9, KI=35.3, accordo Bassa,
+  // nuclei da Veneto sistematicamente sfaldati, zero temporali reali per ore.
+  let disagreePenalty=0;
+  if(D.d2&&D.i2i){
+    const ecC=D.cape[i]||0;
+    const d2C=D.d2.cape[i]||0;
+    const i2C=D.i2i.cape[i]||0;
+    if(d2C>=10||i2C>=10){
+      const localAvg=(d2C+i2C)/2;
+      const ratio=ecC/(localAvg||1);
+      if(ratio>2.2) disagreePenalty=2;
+      else if(ratio>1.6) disagreePenalty=1;
+    }
+  }
+  const ts=Math.max(0,ts_shadow-disagreePenalty);
   return {
     cape,pwat,shr,cin,li,ki,dir,sst:ss,
     ci:{s:ci,c:ciC,lab:ciL},
