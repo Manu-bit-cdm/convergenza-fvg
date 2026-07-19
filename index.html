@@ -810,7 +810,12 @@ function shear(ws8,wd8,ws5,wd5){
   const r=Math.PI/180;
   const u8=-ws8*Math.sin(wd8*r), v8=-ws8*Math.cos(wd8*r);
   const u5=-ws5*Math.sin(wd5*r), v5=-ws5*Math.cos(wd5*r);
-  return Math.sqrt((u5-u8)**2+(v5-v8)**2)*3.6;
+  // FIX 20/07/2026: rimossa moltiplicazione *3.6 erronea.
+  // ws8/ws5 sono già in km/h (unità default Open-Meteo, nessun windspeed_unit
+  // specificato nelle chiamate API). La doppia conversione gonfiava lo shear
+  // di 3.6x — scoperto da valore impossibile "285 km/h" mostrato in atmosfera
+  // prefrontale (fisicamente dovrebbe essere ~79 km/h, 285/3.6=79.2).
+  return Math.sqrt((u5-u8)**2+(v5-v8)**2);
 }
 
 // ═══════════════════════════════════════════════════
