@@ -463,12 +463,28 @@ function checkSentinelEvent(idx){
   const ws5=D.ws500[idx]??0;
   const shr=shear(D.ws850?.[idx],D.wd850?.[idx],ws5,wd5);
 
-  const hasActivity=(sCape>400||sPrecip>0.5);
-  if(!hasActivity) return null;
+  // CAPE da solo indica energia POTENZIALE disponibile, non che un sistema sia
+  // già attivo — "arrivo stimato" implica un sistema reale, non solo atmosfera
+  // instabile. Serve precipitazione osservata come prova di attività reale;
+  // CAPE molto alto (>800) da solo può indicare imminente sviluppo ma va
+  // segnalato in modo più cauto, non come "sistema organizzato in arrivo".
+  const hasRealSystem=sPrecip>1.0;
+  const hasHighPotential=sCape>800&&sPrecip<=1.0;
+  if(!hasRealSystem&&!hasHighPotential) return null;
 
   // Traiettoria: il vento medio 500hPa deve puntare specificamente verso FVG (WSW-W, 250-300°)
   // non genericamente "verso est" — 240-330° include traiettorie che portano verso il Veneto stesso
   const trajectToFVG=(wd5>=250&&wd5<=300);
+
+  // Caso: solo potenziale (CAPE alto ma nessuna precipitazione reale) — non è ancora
+  // un sistema formato, va segnalato come predisposizione, non come arrivo imminente
+  if(hasHighPotential&&!hasRealSystem){
+    return{
+      cape:Math.round(sCape),precip:sPrecip.toFixed(1),pwat:Math.round(sPwat),
+      arrHours:null,wd5:Math.round(wd5),shr:Math.round(shr),
+      weak:true,reason:'potenziale',srcLoc
+    };
+  }
 
   // Shear insufficiente = sistema probabilmente termico isolato, si sfalda avanzando
   const shearOK=shr>=25;
@@ -592,7 +608,12 @@ function renderSynoptic(idx){
   // Verifica sentinella Veneto
   const sent=checkSentinelEvent(idx??0);
   let sentHtml='';
-  if(sent&&sent.weak&&sent.reason==='starvation'){
+  if(sent&&sent.reason==='potenziale'){
+    sentHtml=`<div style="background:#0A0A00;border:1px solid #334155;border-radius:8px;padding:8px 10px;margin-bottom:10px">
+      <div style="font-size:10px;font-weight:700;color:#64748B;margin-bottom:4px">📊 Energia potenziale ${sent.srcLoc||'in Veneto'} — nessun sistema attivo</div>
+      <div style="font-size:9px;color:#475569">CAPE ${sent.cape} J/kg ma precipitazione assente — atmosfera instabile, non ancora un temporale formato</div>
+    </div>`;
+  } else if(sent&&sent.weak&&sent.reason==='starvation'){
     sentHtml=`<div style="background:#0A0A00;border:1px solid #475569;border-radius:8px;padding:8px 10px;margin-bottom:10px">
       <div style="font-size:10px;font-weight:700;color:#94A3B8;margin-bottom:4px">☁️ Attività ${sent.srcLoc||'in Veneto'} — probabile dissipazione avvicinandosi</div>
       <div style="font-size:9px;color:#475569">CAPE ${sent.cape} J/kg ma FVG solo ${sent.fvgCape} J/kg — l'aria in arrivo è già "consumata" energeticamente dal sistema a monte (downstream starvation)</div>
