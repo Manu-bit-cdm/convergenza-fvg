@@ -2095,7 +2095,8 @@ function renderAifsTrend(){
     const mslp=AIFS_DET.hourly.surface_pressure;
     const t850=AIFS_DET.hourly.temperature_850hPa;
     const days=[];
-    for(let i=0;i<times.length;i+=4){
+    // FIX: dati interpolati a passo orario — 24 indici = 24 ore, non 4
+    for(let i=0;i<times.length;i+=24){
       if(z5[i]==null) continue;
       days.push({t:times[i],z5:Math.round(z5[i]/10),mslp:mslp[i]?Math.round(mslp[i]/100):null,t850:t850[i]?t850[i].toFixed(0):null});
     }
@@ -2128,7 +2129,8 @@ function renderAifsTrend(){
     return;
   }
   const days=[];
-  for(let i=0;i<times.length;i+=4){
+  // FIX: dati interpolati a passo orario — 24 indici = 24 ore, non 4
+  for(let i=0;i<times.length;i+=24){
     const vals=memberKeys.map(k=>AIFS_ENS.hourly[k][i]).filter(v=>v!=null).map(v=>v/10);
     if(!vals.length) continue;
     const mean=vals.reduce((a,b)=>a+b,0)/vals.length;
@@ -2167,13 +2169,19 @@ function setAifsDay(btn,d){
 // Raggruppa i punti griglia in macro-zone e calcola Z500 medio per zona
 function aifsZoneAvg(dayIdx){
   if(!AIFS_GRID_DATA) return null;
-  const idx=dayIdx*4; // 4 step da 6h = 24h
+  // Dati interpolati a passo orario — 1 giorno = 24 indici
+  const idx=dayIdx*24;
+  // Zone più granulari: separato Atlantico da Iberia, Alpi/FVG isolato da Germania
   const zones={
-    nord:['Islanda','Scozia','Scandinavia','Baltico'],
-    ovest:['Irlanda','UK','Francia O','Iberia N','Iberia S'],
-    centro:['Germania N','Germania S','Austria','Alpi/FVG','Polonia'],
-    est:['Ungheria','Balcani N','Romania','Grecia'],
-    sud:['Italia S','Nord Africa'],
+    artico:    ['Islanda','Scandinavia'],
+    atlantico: ['Irlanda','UK','Scozia'],
+    iberia:    ['Iberia N','Iberia S'],
+    centroNord:['Germania N','Polonia','Baltico'],
+    centroSud: ['Germania S','Austria','Francia O'],
+    est:       ['Ungheria','Balcani N','Romania'],
+    sudEst:    ['Grecia'],
+    sudOvest:  ['Nord Africa'],
+    italiaSud: ['Italia S'],
   };
   const avg={};
   for(const[z,names] of Object.entries(zones)){
@@ -2181,10 +2189,24 @@ function aifsZoneAvg(dayIdx){
     const vals=pts.map(p=>p.z500[idx]).filter(v=>v!=null).map(v=>v/10);
     avg[z]=vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:null;
   }
-  // Valore specifico FVG
   const fvgPt=AIFS_GRID_DATA.find(p=>p.n==='Alpi/FVG');
   avg.fvg=fvgPt&&fvgPt.z500[idx]!=null?fvgPt.z500[idx]/10:null;
+  // Aggregati compatibili con analisi precedente
+  avg.nord=avg.artico;
+  avg.ovest=avg.atlantico!=null&&avg.iberia!=null?(avg.atlantico+avg.iberia)/2:(avg.atlantico??avg.iberia);
+  avg.centro=avg.centroNord!=null&&avg.centroSud!=null?(avg.centroNord+avg.centroSud)/2:(avg.centroNord??avg.centroSud);
+  avg.sud=avg.sudOvest!=null&&avg.italiaSud!=null?(avg.sudOvest+avg.italiaSud)/2:(avg.sudOvest??avg.italiaSud);
   return avg;
+}
+
+// Stima tilt della saccatura: confronta gradiente NW vs SE della griglia.
+// Tilt negativo (onda inclinata NE-SW, "aperta a ovest") = fase dinamica, favorisce ciclogenesi.
+// Tilt positivo (onda inclinata NW-SE) = fase di riempimento/occlusione.
+function aifsTilt(cur){
+  if(cur.artico==null||cur.sudOvest==null||cur.atlantico==null||cur.sudEst==null) return null;
+  const diagNW_SE = (cur.artico - cur.sudEst);
+  const diagNE_SW = (cur.centroNord??cur.artico) - (cur.sudOvest);
+  return diagNW_SE - diagNE_SW;
 }
 
 function renderAifsSynoptic(){
@@ -2194,63 +2216,88 @@ function renderAifsSynoptic(){
     el.innerHTML='<div style="text-align:center;padding:12px;color:#475569;font-size:10px">⏳ Dati griglia non ancora disponibili</div>';
     return;
   }
-  const today=aifsZoneAvg(0);
   const cur=aifsZoneAvg(AIFS_DAY);
   const next=aifsZoneAvg(Math.min(AIFS_DAY+1,2));
+  const prev=AIFS_DAY>0?aifsZoneAvg(AIFS_DAY-1):null;
   if(!cur||cur.fvg==null){
     el.innerHTML='<div style="text-align:center;padding:12px;color:#475569;font-size:10px">Dati insufficienti per l\'analisi</div>';
     return;
   }
 
-  // ── Identificazione pattern dominante ──
   const ow=cur.ovest, no=cur.nord, es=cur.est, su=cur.sud, ce=cur.centro, fvg=cur.fvg;
-  let pattern='', detail='', implic='', col='#64748B', icon='〰️';
-
-  // Differenze chiave per la classificazione
   const dOvestCentro = ow!=null&&ce!=null ? ow-ce : null;
   const dNordSud = no!=null&&su!=null ? no-su : null;
   const dEstCentro = es!=null&&ce!=null ? es-ce : null;
+  const dSudFvg = su!=null&&fvg!=null ? su-fvg : null;
 
-  if(dOvestCentro!=null&&dOvestCentro<-6){
-    pattern='Saccatura atlantica in approfondimento su Europa occidentale';
+  // ── Check cut-off: minimo isolato a sud/sud-est mentre il resto è riequilibrato ──
+  const isCutoff = cur.italiaSud!=null && cur.centro!=null && cur.artico!=null
+    && (cur.centro-cur.italiaSud)>4
+    && Math.abs(cur.artico-cur.centro)<6; // resto d'Europa relativamente omogeneo
+
+  let pattern='', detail='', implic='', col='#64748B', icon='〰️';
+
+  if(isCutoff){
+    pattern='Goccia fredda / cut-off in area mediterranea';
+    icon='🎯'; col='#A78BFA';
+    detail=`Minimo isolato su Italia meridionale (${Math.round(cur.italiaSud)}dam) mentre il resto d'Europa è relativamente riequilibrato (Centro ${Math.round(cur.centro)}dam) — saccatura staccata dal flusso principale`;
+    implic='Il FVG resta tipicamente ai margini o "in ombra" rispetto al cut-off: l\'energia convettiva si concentra a sud (Centro-Sud Italia), mentre da voi prevale spesso un flusso residuo più secco. Bassa probabilità di fenomeni organizzati, salvo interazioni locali.';
+  } else if(dOvestCentro!=null&&dOvestCentro<-6){
+    const spd = prev&&prev.fvg!=null ? Math.abs(fvg-prev.fvg) : null;
+    const velTxt = spd!=null ? (spd>4?'in rapido transito':spd>1.5?'in transito moderato':'quasi stazionaria') : '';
+    pattern=`Saccatura atlantica in approfondimento su Europa occidentale${velTxt?' — '+velTxt:''}`;
     icon='🌀'; col='#38BDF8';
-    detail=`Ovest ${Math.round(ow)}dam vs Centro ${Math.round(ce)}dam (Δ${Math.round(dOvestCentro)}) — gradiente marcato indica minimo di geopotenziale in transito verso est`;
-    implic=fvg<568?'FVG già coinvolto dal minimo — flusso instabile da SW/W probabile.':'FVG ancora ai margini orientali — possibile coinvolgimento nei prossimi 24-48h se la saccatura avanza.';
+    detail=`Ovest ${Math.round(ow)}dam vs Centro ${Math.round(ce)}dam (Δ${Math.round(dOvestCentro)}dam) — gradiente marcato indica minimo di geopotenziale in transito verso est`;
+    implic=fvg<568?'FVG già coinvolto dal minimo — flusso instabile da SW/W probabile, condizioni per fenomeni organizzati.':'FVG ancora ai margini orientali della saccatura — possibile coinvolgimento diretto nelle prossime 24-48h se il sistema avanza secondo tendenza.';
   } else if(dNordSud!=null&&dNordSud>10&&no>576){
     pattern='Blocco anticiclonico scandinavo';
     icon='🧊'; col='#818CF8';
-    detail=`Nord ${Math.round(no)}dam elevato, gradiente con Sud di ${Math.round(dNordSud)}dam — configurazione a blocco, flusso zonale deviato verso sud`;
-    implic='Possibile richiamo di aria fredda continentale verso il Mediterraneo, o flusso perturbato deviato a sud delle Alpi verso il FVG.';
-  } else if(su!=null&&fvg!=null&&su-fvg>4&&su>580){
+    detail=`Artico/Scandinavia ${Math.round(no)}dam elevato, gradiente con Sud di ${Math.round(dNordSud)}dam — configurazione a blocco, flusso zonale deviato verso sud`;
+    implic='Possibile richiamo di aria fredda continentale verso il Mediterraneo (occhio a episodi di Bora rinforzata), oppure flusso perturbato deviato a sud delle Alpi direttamente sul FVG.';
+  } else if(dSudFvg!=null&&dSudFvg>4&&su>580){
     pattern='Rimonta anticiclonica nordafricana/subtropicale';
     icon='☀️'; col='#F59E0B';
-    detail=`Sud ${Math.round(su)}dam alto, gradiente verso FVG di ${Math.round(su-fvg)}dam — promontorio in estensione verso il Mediterraneo centrale`;
-    implic=fvg>578?'FVG già sotto influenza anticiclonica — stabilità e caldo in rinforzo probabili.':'Anticiclone in avvicinamento da sud — tendenza a stabilizzazione nelle prossime 24-48h.';
+    detail=`Sud ${Math.round(su)}dam alto, gradiente verso FVG di ${Math.round(dSudFvg)}dam — promontorio in estensione verso il Mediterraneo centrale`;
+    implic=fvg>578?'FVG già sotto influenza anticiclonica — stabilità e caldo in rinforzo probabili, bassa attività convettiva attesa.':'Anticiclone in avvicinamento da sud — tendenza a stabilizzazione e rialzo termico nelle prossime 24-48h.';
   } else if(dEstCentro!=null&&Math.abs(dEstCentro)<3&&dOvestCentro!=null&&Math.abs(dOvestCentro)<3){
     pattern='Flusso zonale debole, circolazione poco organizzata';
     icon='〰️'; col='#64748B';
-    detail=`Gradienti deboli su tutte le zone (Est-Centro Δ${Math.round(dEstCentro)}dam, Ovest-Centro Δ${Math.round(dOvestCentro)}dam) — nessuna struttura sinottica dominante`;
-    implic='Circolazione debole e poco organizzata — probabile prevalenza di dinamiche locali (termiche, brezze) più che forzanti sinottiche.';
+    detail=`Gradienti deboli su tutte le zone (Est-Centro Δ${Math.round(dEstCentro)}dam, Ovest-Centro Δ${Math.round(dOvestCentro)}dam) — nessuna struttura sinottica dominante, onda corta debole in transito`;
+    implic='Circolazione debole e poco organizzata — probabile prevalenza di dinamiche locali (termiche, brezze, orografia) più che forzanti sinottiche su scala europea.';
   } else if(dOvestCentro!=null&&dOvestCentro>6){
     pattern='Promontorio anticiclonico atlantico esteso verso l\'Europa centrale';
     icon='🌤️'; col='#22C55E';
-    detail=`Ovest ${Math.round(ow)}dam elevato rispetto al Centro (Δ+${Math.round(dOvestCentro)}) — cuneo di alta pressione in estensione da ovest`;
-    implic='Stabilità in rinforzo sul comparto alpino-padano, FVG compreso — bassa probabilità di fenomeni organizzati nei prossimi giorni.';
+    detail=`Ovest ${Math.round(ow)}dam elevato rispetto al Centro (Δ+${Math.round(dOvestCentro)}dam) — cuneo di alta pressione (tipo "rimonta delle Azzorre") in estensione da ovest`;
+    implic='Stabilità in rinforzo sul comparto alpino-padano, FVG compreso — bassa probabilità di fenomeni organizzati nei prossimi giorni, possibile foschia/nebbie mattutine se persiste.';
   } else {
-    pattern='Pattern misto, transizione in corso';
+    pattern='Pattern misto, fase di transizione';
     icon='🔄'; col='#94A3B8';
-    detail=`Gradienti non riconducibili a un pattern singolo dominante — fase di transizione tra regimi diversi`;
-    implic='Evoluzione incerta — monitorare i parametri locali (CAPE, shear, K Index) per il dettaglio a breve termine.';
+    detail=`Gradienti non riconducibili a un pattern singolo dominante — fase di transizione tra regimi diversi, onda in riorganizzazione`;
+    implic='Evoluzione incerta a scala sinottica — monitorare i parametri locali (CAPE, shear, K Index) per il dettaglio a breve termine, dove il segnale sinottico è debole prevale la variabilità locale.';
   }
 
-  // ── Confronto giorno vs giorno successivo per tendenza ──
+  // ── Tilt della saccatura (solo se pattern è saccatura o transizione) ──
+  let tiltTxt='';
+  const tilt=aifsTilt(cur);
+  if(tilt!=null&&(pattern.includes('Saccatura')||pattern.includes('transizione'))){
+    const tiltDesc = tilt<-4
+      ? 'Tilt negativo (onda aperta verso ovest) — fase dinamica, favorevole a ciclogenesi e intensificazione'
+      : tilt>4
+      ? 'Tilt positivo (onda inclinata verso sud-est) — fase di riempimento, sistema in indebolimento'
+      : 'Asse pressoché verticale — fase di maturità del sistema';
+    tiltTxt=`<div style="margin-top:6px;font-size:9px;color:#64748B">📐 ${tiltDesc}</div>`;
+  }
+
+  // ── Tendenza giorno successivo ──
   let trendTxt='';
   if(next&&next.fvg!=null&&fvg!=null){
     const dFvg=next.fvg-fvg;
     if(Math.abs(dFvg)>=3){
       trendTxt=dFvg>0
-        ?`<div style="margin-top:8px;padding:6px 8px;background:#0A0A00;border-radius:6px;font-size:9px;color:#F59E0B">📈 Z500 sul FVG in aumento di ${Math.round(dFvg)}dam nel giorno successivo — tendenza a stabilizzazione</div>`
-        :`<div style="margin-top:8px;padding:6px 8px;background:#0A0A00;border-radius:6px;font-size:9px;color:#38BDF8">📉 Z500 sul FVG in calo di ${Math.round(Math.abs(dFvg))}dam nel giorno successivo — tendenza a destabilizzazione/saccatura in avvicinamento</div>`;
+        ?`<div style="margin-top:8px;padding:6px 8px;background:#0A0A00;border-radius:6px;font-size:9px;color:#F59E0B">📈 Z500 sul FVG in aumento di ${Math.round(dFvg)}dam nel giorno successivo — tendenza a stabilizzazione/rialzo termico</div>`
+        :`<div style="margin-top:8px;padding:6px 8px;background:#0A0A00;border-radius:6px;font-size:9px;color:#38BDF8">📉 Z500 sul FVG in calo di ${Math.round(Math.abs(dFvg))}dam nel giorno successivo — tendenza a destabilizzazione, saccatura/aria fredda in avvicinamento</div>`;
+    } else {
+      trendTxt=`<div style="margin-top:8px;padding:6px 8px;background:#05080F;border-radius:6px;font-size:9px;color:#475569">➡️ Z500 stazionario nel giorno successivo (Δ${dFvg>=0?'+':''}${Math.round(dFvg)}dam) — pattern persistente</div>`;
     }
   }
 
@@ -2260,15 +2307,16 @@ function renderAifsSynoptic(){
       <div>
         <div style="font-size:12px;font-weight:700;color:${col};margin-bottom:3px">${pattern}</div>
         <div style="font-size:9px;color:#64748B;line-height:1.5">${detail}</div>
+        ${tiltTxt}
       </div>
     </div>
     <div style="padding:8px 10px;background:#05080F;border-radius:7px;border-left:2px solid ${col}">
-      <div style="font-size:8px;color:#334155;margin-bottom:2px;text-transform:uppercase;letter-spacing:1px">Implicazione per il FVG</div>
+      <div style="font-size:8px;color:#334155;margin-bottom:2px;text-transform:uppercase;letter-spacing:1px">Conseguenze per il FVG</div>
       <div style="font-size:10px;color:#94A3B8;line-height:1.4">${implic}</div>
     </div>
     ${trendTxt}
     <div style="margin-top:8px;font-size:8px;color:#1E3050">
-      Z500: FVG ${fvg!=null?Math.round(fvg):'--'}dam · Ovest ${ow!=null?Math.round(ow):'--'} · Nord ${no!=null?Math.round(no):'--'} · Est ${es!=null?Math.round(es):'--'} · Sud ${su!=null?Math.round(su):'--'}
+      Z500: FVG ${fvg!=null?Math.round(fvg):'--'}dam · Atlantico ${cur.atlantico!=null?Math.round(cur.atlantico):'--'} · Artico ${cur.artico!=null?Math.round(cur.artico):'--'} · Est ${es!=null?Math.round(es):'--'} · It.Sud ${cur.italiaSud!=null?Math.round(cur.italiaSud):'--'} · N.Africa ${cur.sudOvest!=null?Math.round(cur.sudOvest):'--'}
     </div>`;
 }
 
