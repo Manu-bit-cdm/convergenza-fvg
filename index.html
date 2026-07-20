@@ -95,6 +95,7 @@ button,.dir-btn{touch-action:manipulation;min-height:36px;cursor:pointer}
 <div style="display:flex;gap:8px;margin-bottom:12px">
   <button id="tabMonitor" class="tab-btn active" onclick="switchTab('monitor')">📡 Monitor</button>
   <button id="tabAnalisi"  class="tab-btn"        onclick="switchTab('analisi')">🔬 Analisi</button>
+  <button id="tabAifs"     class="tab-btn"         onclick="switchTab('aifs')">🤖 AIFS</button>
 </div>
 
 <div id="pageMonitor">
@@ -310,6 +311,37 @@ button,.dir-btn{touch-action:manipulation;min-height:36px;cursor:pointer}
 
 </div><!-- fine pageAnalisi -->
 
+<!-- PAGINA AIFS -->
+<div id="pageAifs" style="display:none">
+
+<div style="font-size:9px;color:#06B6D4;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">🤖 Tendenza Circolazione — ECMWF AIFS</div>
+<div style="font-size:9px;color:#334155;margin-bottom:10px">Modello AI globale · orizzonte 10 giorni · step 6h · non sostituisce la previsione a breve termine</div>
+
+<!-- Toggle deterministico/ensemble -->
+<div style="display:flex;gap:6px;margin-bottom:11px">
+  <button id="btn_aifsDet" class="mbtn active" onclick="setAifsMode('det')" style="flex:1;padding:6px">Deterministico</button>
+  <button id="btn_aifsEns" class="mbtn" onclick="setAifsMode('ens')" style="flex:1;padding:6px">Ensemble (spread)</button>
+</div>
+
+<!-- Card tendenza FVG -->
+<div class="sc" id="aifsTrendCard" style="margin-bottom:11px">
+  <div id="aifsTrendBody"><div style="text-align:center;padding:12px;color:#475569;font-size:10px">⏳ Caricamento AIFS...</div></div>
+</div>
+
+<!-- Mappa griglia Europa -->
+<div class="sc" style="margin-bottom:11px">
+  <div style="font-size:9px;color:#06B6D4;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">🗺️ Geopotenziale 500hPa — Europa</div>
+  <div style="font-size:8px;color:#334155;margin-bottom:8px">Griglia indicativa 20 punti — rosso=alta pressione/dam alto, blu=bassa pressione/saccatura</div>
+  <div id="aifsMapWrapper" style="border-radius:10px;overflow:hidden;border:1px solid #1A2E45">
+    <div id="aifsMapContainer" style="height:280px;background:#0C1B2E"></div>
+  </div>
+  <div id="aifsMapTime" style="font-size:8px;color:#334155;text-align:right;margin-top:6px"></div>
+</div>
+
+<div class="mono" style="text-align:center;margin-top:10px;margin-bottom:4px;font-size:9px;color:#1A2535">AIFS · ECMWF AI Forecasting System · dati Open-Meteo</div>
+
+</div><!-- fine pageAifs -->
+
 <script>try{document.getElementById('stxt').textContent='JS mini OK';}catch(e){}</script>
 <script>
 try{document.getElementById('stxt').textContent='MAIN start';}catch(e){}
@@ -357,10 +389,17 @@ function toggleLayer(name){
 function switchTab(name){
   document.getElementById('pageMonitor').style.display=name==='monitor'?'block':'none';
   document.getElementById('pageAnalisi').style.display=name==='analisi'?'block':'none';
+  document.getElementById('pageAifs').style.display=name==='aifs'?'block':'none';
   document.getElementById('tabMonitor').className='tab-btn'+(name==='monitor'?' active':'');
   document.getElementById('tabAnalisi').className='tab-btn'+(name==='analisi'?' active':'');
+  document.getElementById('tabAifs').className='tab-btn'+(name==='aifs'?' active':'');
   // Carica sondaggio quando si apre il tab Analisi
   if(name==='analisi') loadRivoltoSounding();
+  // Carica AIFS quando si apre il tab per la prima volta
+  if(name==='aifs'){
+    if(!AIFS_LOADED){loadAifs();AIFS_LOADED=true;}
+    else if(!AIFS_MAP_INIT){initAifsMap();}
+  }
 }
 
 // Pannello modelli globali (ECMWF + ICON-EU)
@@ -674,6 +713,30 @@ const LAT_G=45.68,LON_G=13.40;        // Grado (SST)
 const LAT_ISO=45.95,LON_ISO=13.55;    // Gorizia/Isonzo — punto orientale FVG per ΔWD convergenza
 const LAT_SV=45.67,LON_SV=12.24;      // Sentinella Veneto pianura (Treviso) — sistemi da W bassa quota
 const LAT_SV2=46.07,LON_SV2=12.30;    // Sentinella Veneto pedemontana (Vittorio Veneto) — stessa fascia orografica del FVG
+
+// Griglia Europa per mappa AIFS Z500 (20 punti, copertura Islanda→Nord Africa, Iberia→Balcani)
+const EU_GRID=[
+  {n:'Islanda',    lat:64.0,lon:-18.0},
+  {n:'Scozia',     lat:57.0,lon:-4.0},
+  {n:'Scandinavia',lat:60.0,lon:15.0},
+  {n:'Baltico',    lat:56.0,lon:24.0},
+  {n:'Irlanda',    lat:53.0,lon:-8.0},
+  {n:'UK',         lat:52.5,lon:-1.5},
+  {n:'Germania N', lat:53.5,lon:10.0},
+  {n:'Polonia',    lat:52.0,lon:19.0},
+  {n:'Francia O',  lat:47.5,lon:-1.5},
+  {n:'Germania S', lat:48.5,lon:11.5},
+  {n:'Austria',    lat:47.5,lon:14.0},
+  {n:'Ungheria',   lat:47.0,lon:19.5},
+  {n:'Iberia N',   lat:42.5,lon:-3.5},
+  {n:'Alpi/FVG',   lat:46.0,lon:13.2},
+  {n:'Balcani N',  lat:44.5,lon:18.0},
+  {n:'Romania',    lat:45.5,lon:25.0},
+  {n:'Iberia S',   lat:37.5,lon:-4.0},
+  {n:'Italia S',   lat:40.5,lon:16.0},
+  {n:'Grecia',     lat:39.0,lon:22.0},
+  {n:'Nord Africa',lat:34.0,lon:9.0},
+];
 
 // ─── 8 punti precipitazioni FVG ────────────────────
 const PRECIP_PTS=[
@@ -1772,15 +1835,21 @@ function updatePrecipLayer(){
       c.setStyle({fillOpacity:0,opacity:0,weight:0});
       return;
     }
-    // Raggio proporzionale ai mm (8-35km)
-    const r=Math.min(35000,7000+v*800);
-    // Colore per intensità
-    const col=v>=20?'#7C3AED':v>=10?'#6366F1':v>=5?'#0284C7':'#38BDF8';
+    // Raggio fisso — leggibilità costante, non ingrandisce con l'intensità
+    const r=9000;
+    // Scala colore a 6 livelli — più ricca e leggibile della sola dimensione
+    let col;
+    if(v>=35)      col='#DB2777'; // rosa intenso — estremo
+    else if(v>=20) col='#9333EA'; // viola — molto forte
+    else if(v>=10) col='#6366F1'; // indaco — forte
+    else if(v>=5)  col='#0284C7'; // blu — moderato
+    else if(v>=2)  col='#38BDF8'; // azzurro — leggero
+    else           col='#7DD3FC'; // azzurro chiaro — debole
     c.setRadius(r);
     c.setStyle({
       color:col,fillColor:col,
-      fillOpacity:0.15+Math.min(0.25,v/100),
-      opacity:0.6,weight:1.5
+      fillOpacity:0.55,
+      opacity:0.85,weight:2
     });
   });
 }
@@ -1972,6 +2041,146 @@ document.querySelectorAll('.tbtn').forEach(b=>{
 document.getElementById('sdot').style.cssText='width:7px;height:7px;border-radius:50%;flex-shrink:0;margin-right:5px;background:#EAB308;animation:spin .8s linear infinite';
 
 // Verifica Leaflet prima di chiamare initMap
+// ═══════════════════════════════════════════════════
+// AIFS — Tendenza circolazione medio termine (ECMWF AI model)
+// ═══════════════════════════════════════════════════
+var AIFS_LOADED=false, AIFS_MAP_INIT=false, AIFS_MODE='det';
+var AIFS_DET=null, AIFS_ENS=null, AIFS_GRID_DATA=null;
+var AIFS_MAP=null, AIFS_MARKERS=[];
+
+function setAifsMode(mode){
+  AIFS_MODE=mode;
+  document.getElementById('btn_aifsDet').className='mbtn'+(mode==='det'?' active':'');
+  document.getElementById('btn_aifsEns').className='mbtn'+(mode==='ens'?' active':'');
+  renderAifsTrend();
+}
+
+async function loadAifs(){
+  const body=document.getElementById('aifsTrendBody');
+  try{
+    const detUrl=`https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&hourly=geopotential_height_500hPa,surface_pressure,temperature_850hPa&models=ecmwf_aifs025_single&forecast_days=10&timezone=Europe%2FRome`;
+    AIFS_DET=await fj(detUrl).catch(e=>{console.warn('AIFS det:',e.message);return null;});
+
+    const ensUrl=`https://ensemble-api.open-meteo.com/v1/ensemble?latitude=${LAT}&longitude=${LON}&hourly=geopotential_height_500hPa&models=ecmwf_aifs025&forecast_days=10&timezone=Europe%2FRome`;
+    AIFS_ENS=await fj(ensUrl).catch(e=>{console.warn('AIFS ens:',e.message);return null;});
+
+    renderAifsTrend();
+  }catch(e){
+    console.warn('loadAifs:',e.message);
+    if(body) body.innerHTML='<div style="text-align:center;padding:12px;color:#EF4444;font-size:10px">⚠ Dati AIFS non disponibili</div>';
+  }
+
+  try{
+    const gridResults=await Promise.all(EU_GRID.map(async pt=>{
+      try{
+        const url=`https://api.open-meteo.com/v1/forecast?latitude=${pt.lat}&longitude=${pt.lon}&hourly=geopotential_height_500hPa&models=ecmwf_aifs025_single&forecast_days=3&timezone=Europe%2FRome`;
+        const d=await fj(url);
+        return{...pt,z500:d.hourly.geopotential_height_500hPa||[],times:d.hourly.time||[]};
+      }catch(e){return{...pt,z500:[],times:[]};}
+    }));
+    AIFS_GRID_DATA=gridResults;
+    initAifsMap();
+  }catch(e){console.warn('AIFS grid:',e.message);}
+}
+
+function renderAifsTrend(){
+  const body=document.getElementById('aifsTrendBody');
+  if(!body) return;
+
+  if(AIFS_MODE==='det'){
+    if(!AIFS_DET||!AIFS_DET.hourly){
+      body.innerHTML='<div style="text-align:center;padding:12px;color:#475569;font-size:10px">⏳ Dati deterministici non disponibili</div>';
+      return;
+    }
+    const times=AIFS_DET.hourly.time;
+    const z5=AIFS_DET.hourly.geopotential_height_500hPa;
+    const mslp=AIFS_DET.hourly.surface_pressure;
+    const t850=AIFS_DET.hourly.temperature_850hPa;
+    const days=[];
+    for(let i=0;i<times.length;i+=4){
+      if(z5[i]==null) continue;
+      days.push({t:times[i],z5:Math.round(z5[i]/10),mslp:mslp[i]?Math.round(mslp[i]/100):null,t850:t850[i]?t850[i].toFixed(0):null});
+    }
+    body.innerHTML=`<div style="font-size:8px;color:#334155;margin-bottom:8px">Z500 (dam) · Pressione (hPa) · T850 (°C) — ogni 24h</div>`+
+      days.map(d=>{
+        const dt=new Date(d.t);
+        const gg=['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][dt.getDay()];
+        const dd=String(dt.getDate()).padStart(2,'0');
+        const col=d.z5>=584?'#EF4444':d.z5>=576?'#F97316':d.z5>=568?'#EAB308':'#38BDF8';
+        return`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #0A1018">
+          <div style="width:44px;font-size:9px;color:#64748B;flex-shrink:0">${gg} ${dd}</div>
+          <div style="flex:1;display:flex;align-items:center;gap:6px">
+            <div style="width:8px;height:8px;border-radius:50%;background:${col};flex-shrink:0"></div>
+            <div style="font-size:10px;color:#94A3B8">Z500 ${d.z5}dam</div>
+          </div>
+          <div style="font-size:9px;color:#475569">${d.mslp??'--'}hPa · ${d.t850??'--'}°</div>
+        </div>`;
+      }).join('');
+    return;
+  }
+
+  if(!AIFS_ENS||!AIFS_ENS.hourly){
+    body.innerHTML='<div style="text-align:center;padding:12px;color:#475569;font-size:10px">⏳ Dati ensemble non disponibili</div>';
+    return;
+  }
+  const times=AIFS_ENS.hourly.time;
+  const memberKeys=Object.keys(AIFS_ENS.hourly).filter(k=>k.startsWith('geopotential_height_500hPa'));
+  if(!memberKeys.length){
+    body.innerHTML='<div style="text-align:center;padding:12px;color:#475569;font-size:10px">Nessun membro ensemble disponibile</div>';
+    return;
+  }
+  const days=[];
+  for(let i=0;i<times.length;i+=4){
+    const vals=memberKeys.map(k=>AIFS_ENS.hourly[k][i]).filter(v=>v!=null).map(v=>v/10);
+    if(!vals.length) continue;
+    const mean=vals.reduce((a,b)=>a+b,0)/vals.length;
+    const min=Math.min(...vals), max=Math.max(...vals);
+    const spread=max-min;
+    const agree=spread<6?'Alta':spread<14?'Media':'Bassa';
+    const agreeCol=spread<6?'#22C55E':spread<14?'#EAB308':'#EF4444';
+    days.push({t:times[i],mean:Math.round(mean),min:Math.round(min),max:Math.round(max),agree,agreeCol});
+  }
+  body.innerHTML=`<div style="font-size:8px;color:#334155;margin-bottom:8px">Z500 medio (dam) · range membri · accordo ensemble (${memberKeys.length} membri)</div>`+
+    days.map(d=>{
+      const dt=new Date(d.t);
+      const gg=['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][dt.getDay()];
+      const dd=String(dt.getDate()).padStart(2,'0');
+      return`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #0A1018">
+        <div style="width:44px;font-size:9px;color:#64748B;flex-shrink:0">${gg} ${dd}</div>
+        <div style="flex:1;font-size:10px;color:#94A3B8">Z500 ${d.mean}dam <span style="color:#334155">(${d.min}–${d.max})</span></div>
+        <div style="font-size:9px;font-weight:700;color:${d.agreeCol}">${d.agree}</div>
+      </div>`;
+    }).join('');
+}
+
+function initAifsMap(){
+  if(!AIFS_GRID_DATA||AIFS_MAP_INIT) return;
+  const el=document.getElementById('aifsMapContainer');
+  if(!el||typeof L==='undefined') return;
+  try{
+    AIFS_MAP=L.map('aifsMapContainer',{center:[50,10],zoom:3,scrollWheelZoom:false,tap:false,attributionControl:false,zoomControl:false});
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:8}).addTo(AIFS_MAP);
+
+    AIFS_MARKERS=AIFS_GRID_DATA.map(pt=>{
+      const z5=pt.z500[0]?Math.round(pt.z500[0]/10):null;
+      const col=z5==null?'#475569':z5>=584?'#EF4444':z5>=576?'#F97316':z5>=568?'#EAB308':'#38BDF8';
+      return L.circleMarker([pt.lat,pt.lon],{
+        radius:9,color:col,fillColor:col,fillOpacity:0.65,weight:1.5,opacity:0.9
+      }).bindTooltip(`${pt.n}: ${z5??'N/D'} dam`,{className:'jal-lbl'}).addTo(AIFS_MAP);
+    });
+
+    const tEl=document.getElementById('aifsMapTime');
+    if(tEl&&AIFS_GRID_DATA[0]?.times?.[0]){
+      const dt=new Date(AIFS_GRID_DATA[0].times[0]);
+      tEl.textContent=`Dati: ${dt.toLocaleDateString('it-IT')} ${String(dt.getHours()).padStart(2,'0')}:00`;
+    }
+    AIFS_MAP_INIT=true;
+  }catch(e){
+    console.warn('initAifsMap:',e.message);
+    el.innerHTML='<div style="color:#EF4444;padding:20px;font-size:11px;text-align:center">⚠ Errore inizializzazione mappa</div>';
+  }
+}
+
 if(typeof L === 'undefined'){
   var el=document.getElementById('stxt');
   if(el) el.textContent='⚠ Leaflet non caricato — CDN bloccata';
