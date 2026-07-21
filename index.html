@@ -2275,32 +2275,78 @@ function renderAifsSynoptic(){
   const dayNow=aifsDayLabel(AIFS_DAY);
   const transition=aifsFindTransitionDay();
 
-  // ── Frase 1: quadro attuale del comparto europeo ──
-  let s1='';
-  if(isCutoff){
-    s1=`Il comparto europeo mostra al momento una **goccia fredda isolata** sull'Italia meridionale (Z500 ${Math.round(cur.italiaSud)} dam), separata dal flusso principale che resta relativamente riequilibrato più a nord (${Math.round(cur.centro)} dam sul comparto centro-europeo).`;
-  } else if(dOvestCentro!=null&&dOvestCentro<-6){
-    s1=`Il comparto europeo è dominato da un **flusso atlantico in intensificazione**, con una saccatura depressionaria che si approfondisce sul settore occidentale (Z500 ${Math.round(ow)} dam) mentre l'Europa centrale resta relativamente più alta (${Math.round(ce)} dam).`;
-  } else if(dNordSud!=null&&dNordSud>10&&no>576){
-    s1=`Un **blocco anticiclonico** insiste sul settore scandinavo-artico (Z500 ${Math.round(no)} dam), deviando il flusso atlantico verso latitudini più meridionali.`;
-  } else if(dSudFvg!=null&&dSudFvg>4&&su>580){
-    s1=`Il quadro europeo vede una **rimonta anticiclonica** dal Nord Africa/Mediterraneo (Z500 ${Math.round(su)} dam) in estensione verso il comparto alpino.`;
-  } else if(dOvestCentro!=null&&dOvestCentro>6){
-    s1=`Un **promontorio anticiclonico atlantico** (Z500 ${Math.round(ow)} dam) si estende verso l'Europa centrale, garantendo stabilità diffusa.`;
-  } else {
-    s1=`La circolazione europea appare **debole e poco organizzata**, senza una struttura sinottica dominante (gradienti Ovest-Centro di soli ${dOvestCentro!=null?Math.round(Math.abs(dOvestCentro)):'--'} dam).`;
+  // ── Localizza il punto di massimo e minimo Z500 sull'intera griglia ──
+  // Serve a citare la posizione geografica esatta del centro d'azione, non solo la macro-zona
+  const idxNow=AIFS_DAY*24;
+  const gridVals=AIFS_GRID_DATA
+    .map(p=>({n:p.n,v:p.z500[idxNow]!=null?p.z500[idxNow]/10:null}))
+    .filter(p=>p.v!=null);
+  let maxPt=null,minPt=null;
+  if(gridVals.length){
+    maxPt=gridVals.reduce((a,b)=>b.v>a.v?b:a);
+    minPt=gridVals.reduce((a,b)=>b.v<a.v?b:a);
   }
 
-  // ── Frase 2: evoluzione temporale (usa transition se rilevata) ──
+  // ── Classificazione struttura del sistema instabile (se presente un minimo rilevante) ──
+  // Distingue saccatura atlantica pura, goccia fredda isolata, cavo d'onda breve
+  function classifySystem(){
+    if(!minPt) return null;
+    const isIsolated = isCutoff; // già rilevato: minimo isolato, resto d'Europa riequilibrato
+    const tilt=aifsTilt(cur);
+    if(isIsolated){
+      return{tipo:'goccia fredda isolata',
+        note:'nucleo depressionario in quota tagliato fuori dalla circolazione principale, evoluzione lenta e poco prevedibile nella traiettoria'};
+    }
+    if(minPt.v<566&&tilt!=null&&tilt<-4){
+      return{tipo:'saccatura atlantica profonda e dinamica',
+        note:'onda in fase di approfondimento attivo, asse inclinato favorevole a ciclogenesi'};
+    }
+    if(minPt.v<572){
+      return{tipo:'saccatura atlantica/nord-atlantica strutturata',
+        note:'onda ben organizzata in transito verso il continente'};
+    }
+    if(minPt.v<578){
+      return{tipo:'cavo d\'onda instabile (onda corta)',
+        note:'perturbazione di ampiezza limitata, transito rapido e effetti circoscritti'};
+    }
+    return null;
+  }
+  const sysClass=classifySystem();
+
+  // ── Frase 1: quadro attuale con localizzazione precisa ──
+  let s1='';
+  if(isCutoff){
+    s1=`Il comparto europeo mostra una **goccia fredda isolata** in quota su **${minPt?minPt.n:'Italia meridionale'}** (Z500 ${minPt?Math.round(minPt.v):Math.round(cur.italiaSud)} dam), separata dal flusso principale che resta relativamente riequilibrato più a nord (${Math.round(cur.centro)} dam sul comparto centro-europeo). ${sysClass?sysClass.note.charAt(0).toUpperCase()+sysClass.note.slice(1)+'.':''}`;
+  } else if(dOvestCentro!=null&&dOvestCentro<-6){
+    const tipoTxt=sysClass?` — configurazione classificabile come **${sysClass.tipo}**`:'';
+    s1=`Il comparto europeo è dominato da un **flusso atlantico in intensificazione**, con il minimo di geopotenziale localizzato su **${minPt?minPt.n:'settore occidentale'}** (${minPt?Math.round(minPt.v):Math.round(ow)} dam)${tipoTxt}, mentre il massimo relativo si trova su **${maxPt?maxPt.n:'Nord Africa'}** (${maxPt?Math.round(maxPt.v):'--'} dam). ${sysClass?sysClass.note.charAt(0).toUpperCase()+sysClass.note.slice(1)+'.':''}`;
+  } else if(dNordSud!=null&&dNordSud>10&&no>576){
+    s1=`Un **blocco anticiclonico** insiste sul settore scandinavo-artico, con il massimo di geopotenziale su **${maxPt?maxPt.n:'Scandinavia'}** (${maxPt?Math.round(maxPt.v):Math.round(no)} dam), deviando il flusso atlantico verso latitudini più meridionali. Il minimo relativo si colloca su **${minPt?minPt.n:'--'}** (${minPt?Math.round(minPt.v):'--'} dam).`;
+  } else if(dSudFvg!=null&&dSudFvg>4&&su>580){
+    s1=`Il quadro europeo vede una **rimonta anticiclonica** dal Nord Africa/Mediterraneo, con i massimi di geopotenziale e pressione concentrati su **${maxPt?maxPt.n:'Nord Africa'}** (${maxPt?Math.round(maxPt.v):Math.round(su)} dam) in estensione verso il comparto alpino-centro-occidentale.`;
+  } else if(dOvestCentro!=null&&dOvestCentro>6){
+    s1=`Un **promontorio anticiclonico atlantico** (massimo su **${maxPt?maxPt.n:'settore atlantico'}**, ${maxPt?Math.round(maxPt.v):Math.round(ow)} dam) si estende verso l'Europa centrale, garantendo stabilità diffusa.`;
+  } else {
+    s1=`La circolazione europea appare **debole e poco organizzata**, senza una struttura sinottica dominante (gradienti Ovest-Centro di soli ${dOvestCentro!=null?Math.round(Math.abs(dOvestCentro)):'--'} dam). Massimo relativo su **${maxPt?maxPt.n:'--'}** (${maxPt?Math.round(maxPt.v):'--'} dam), minimo su **${minPt?minPt.n:'--'}** (${minPt?Math.round(minPt.v):'--'} dam).`;
+  }
+
+  // ── Frase 2: evoluzione temporale con dettaglio traiettoria ──
   let s2='';
   if(transition){
     const lbl=aifsDayLabel(transition.day);
     const dir=next&&cur.fvg!=null&&next.fvg!=null&&next.fvg<cur.fvg?'in calo':'in aumento';
-    s2=` Nei prossimi giorni il pattern è atteso evolvere, con un cambiamento più marcato **tra ${dayNow} e ${lbl}** (variazione di ${Math.round(transition.delta)} dam sul FVG, ${dir}) — `;
+    // Traiettoria: confronta la posizione del minimo tra oggi e il giorno di transizione
+    const idxTrans=transition.day*24;
+    const gridValsTrans=AIFS_GRID_DATA.map(p=>({n:p.n,v:p.z500[idxTrans]!=null?p.z500[idxTrans]/10:null})).filter(p=>p.v!=null);
+    const minPtTrans=gridValsTrans.length?gridValsTrans.reduce((a,b)=>b.v<a.v?b:a):null;
+    const traiettoriaTxt = (minPt&&minPtTrans&&minPt.n!==minPtTrans.n)
+      ? ` Il centro d'azione è atteso spostarsi da **${minPt.n}** verso **${minPtTrans.n}**,`
+      : '';
+    s2=` Nei prossimi giorni il pattern è atteso evolvere, con un cambiamento più marcato **tra ${dayNow} e ${lbl}** (variazione di ${Math.round(transition.delta)} dam sul FVG, ${dir}).${traiettoriaTxt} `;
     if(dir==='in calo'){
-      s2+=`la tendenza è verso un **peggioramento delle condizioni**, con il fronte perturbato atteso interessare l'arco alpino orientale entro **${lbl}**.`;
+      s2+=`La tendenza è verso un **peggioramento delle condizioni**${sysClass&&(sysClass.tipo.includes('saccatura')||sysClass.tipo.includes('cavo'))?`, con il sistema (${sysClass.tipo}) e il fronte perturbato annesso`:', con il fronte perturbato'} atteso interessare l'arco alpino orientale entro **${lbl}**.`;
     }else{
-      s2+=`la tendenza è verso una **stabilizzazione**, con rialzo del geopotenziale e attenuazione dell'instabilità.`;
+      s2+=`La tendenza è verso una **stabilizzazione**, con rialzo del geopotenziale e attenuazione dell'instabilità.`;
     }
   } else if(next&&cur.fvg!=null&&next.fvg!=null){
     const dFvg=next.fvg-cur.fvg;
@@ -2323,7 +2369,7 @@ function renderAifsSynoptic(){
     s3=` Sul **FVG** (Z500 ${Math.round(fvg)} dam) la situazione resta da monitorare — il segnale sinottico non è ancora decisivo, verificare l'evoluzione dei parametri locali per il dettaglio a breve termine.`;
   }
 
-  // ── Frase 4: attendibilità (ensemble spread se disponibile, altrimenti nota generica) ──
+  // ── Frase 4: attendibilità (ensemble spread se disponibile) ──
   let s4='';
   const daysOut=AIFS_DAY;
   if(AIFS_ENS&&AIFS_ENS.hourly){
@@ -2340,11 +2386,10 @@ function renderAifsSynoptic(){
     s4=` ⚠️ A ${daysOut} giorni di distanza il quadro resta indicativo — consigliato monitorare i prossimi aggiornamenti per conferma.`;
   }
 
-  // Sostituzione markdown-like ** con span colorati
   const bold=t=>t.replace(/\*\*(.+?)\*\*/g,'<span style="color:#E2E8F0;font-weight:700">$1</span>');
 
   el.innerHTML=`
-    <div style="font-size:11.5px;line-height:1.75;color:#94A3B8">
+    <div style="font-size:11.5px;line-height:1.8;color:#94A3B8">
       ${bold(s1)}${bold(s2)}${bold(s3)}
     </div>
     ${s4?`<div style="margin-top:10px;padding:7px 9px;background:#0A0A00;border-radius:6px;font-size:9.5px;color:#94A3B8;line-height:1.5">${s4}</div>`:''}
