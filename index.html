@@ -2280,8 +2280,6 @@ function renderAifsSynoptic(){
   const dayNow=aifsDayLabel(AIFS_DAY);
   const transition=aifsFindTransitionDay();
 
-  // ── Localizza il punto di massimo e minimo Z500 sull'intera griglia ──
-  // Serve a citare la posizione geografica esatta del centro d'azione, non solo la macro-zona
   const idxNow=AIFS_DAY*24;
   const gridVals=AIFS_GRID_DATA
     .map(p=>({n:p.n,v:p.z500[idxNow]!=null?p.z500[idxNow]/10:null}))
@@ -2292,11 +2290,9 @@ function renderAifsSynoptic(){
     minPt=gridVals.reduce((a,b)=>b.v<a.v?b:a);
   }
 
-  // ── Classificazione struttura del sistema instabile (se presente un minimo rilevante) ──
-  // Distingue saccatura atlantica pura, goccia fredda isolata, cavo d'onda breve
   function classifySystem(){
     if(!minPt) return null;
-    const isIsolated = isCutoff; // già rilevato: minimo isolato, resto d'Europa riequilibrato
+    const isIsolated = isCutoff;
     const tilt=aifsTilt(cur);
     if(isIsolated){
       return{tipo:'goccia fredda isolata',
@@ -2318,41 +2314,61 @@ function renderAifsSynoptic(){
   }
   const sysClass=classifySystem();
 
-  // ── Frase 1: quadro attuale con localizzazione precisa ──
+  // ── Frase 1: quadro contestualizzato al giorno specifico (non genericamente "attuale") ──
+  // Per oggi usa il presente semplice, per i giorni futuri specifica sempre "nella giornata di..."
+  const dayCtx = AIFS_DAY===0 ? '' : `Nella giornata di **${dayNow}**, `;
+  const verboEssere = AIFS_DAY===0 ? 'è' : 'sarà';
+  const verboVede = AIFS_DAY===0 ? 'mostra' : 'vedrà';
+
   let s1='';
   if(isCutoff){
-    s1=`Il comparto europeo mostra una **goccia fredda isolata** in quota su **${minPt?minPt.n:'Italia meridionale'}** (Z500 ${minPt?Math.round(minPt.v):Math.round(cur.italiaSud)} dam), separata dal flusso principale che resta relativamente riequilibrato più a nord (${Math.round(cur.centro)} dam sul comparto centro-europeo). ${sysClass?sysClass.note.charAt(0).toUpperCase()+sysClass.note.slice(1)+'.':''}`;
+    s1=`${dayCtx}${AIFS_DAY===0?'il comparto europeo mostra':'il comparto europeo vedrà'} una **goccia fredda isolata** in quota su **${minPt?minPt.n:'Italia meridionale'}** (Z500 ${minPt?Math.round(minPt.v):Math.round(cur.italiaSud)} dam), separata dal flusso principale che ${AIFS_DAY===0?'resta':'resterà'} relativamente riequilibrato più a nord (${Math.round(cur.centro)} dam sul comparto centro-europeo). ${sysClass?sysClass.note.charAt(0).toUpperCase()+sysClass.note.slice(1)+'.':''}`;
   } else if(dOvestCentro!=null&&dOvestCentro<-6){
     const tipoTxt=sysClass?` — configurazione classificabile come **${sysClass.tipo}**`:'';
-    s1=`Il comparto europeo è dominato da un **flusso atlantico in intensificazione**, con il minimo di geopotenziale localizzato su **${minPt?minPt.n:'settore occidentale'}** (${minPt?Math.round(minPt.v):Math.round(ow)} dam)${tipoTxt}, mentre il massimo relativo si trova su **${maxPt?maxPt.n:'Nord Africa'}** (${maxPt?Math.round(maxPt.v):'--'} dam). ${sysClass?sysClass.note.charAt(0).toUpperCase()+sysClass.note.slice(1)+'.':''}`;
+    s1=`${dayCtx}${AIFS_DAY===0?'il comparto europeo è dominato da':'il comparto europeo sarà dominato da'} un **flusso atlantico in intensificazione**, con il minimo di geopotenziale localizzato su **${minPt?minPt.n:'settore occidentale'}** (${minPt?Math.round(minPt.v):Math.round(ow)} dam)${tipoTxt}, mentre il massimo relativo ${AIFS_DAY===0?'si trova':'si troverà'} su **${maxPt?maxPt.n:'Nord Africa'}** (${maxPt?Math.round(maxPt.v):'--'} dam). ${sysClass?sysClass.note.charAt(0).toUpperCase()+sysClass.note.slice(1)+'.':''}`;
   } else if(dNordSud!=null&&dNordSud>10&&no>576){
-    s1=`Un **blocco anticiclonico** insiste sul settore scandinavo-artico, con il massimo di geopotenziale su **${maxPt?maxPt.n:'Scandinavia'}** (${maxPt?Math.round(maxPt.v):Math.round(no)} dam), deviando il flusso atlantico verso latitudini più meridionali. Il minimo relativo si colloca su **${minPt?minPt.n:'--'}** (${minPt?Math.round(minPt.v):'--'} dam).`;
+    s1=`${dayCtx}${AIFS_DAY===0?'un blocco anticiclonico insiste':'un blocco anticiclonico insisterà'} sul settore scandinavo-artico, con il massimo di geopotenziale su **${maxPt?maxPt.n:'Scandinavia'}** (${maxPt?Math.round(maxPt.v):Math.round(no)} dam), deviando il flusso atlantico verso latitudini più meridionali. Il minimo relativo ${AIFS_DAY===0?'si colloca':'si collocherà'} su **${minPt?minPt.n:'--'}** (${minPt?Math.round(minPt.v):'--'} dam).`;
   } else if(dSudFvg!=null&&dSudFvg>4&&su>580){
-    s1=`Il quadro europeo vede una **rimonta anticiclonica** dal Nord Africa/Mediterraneo, con i massimi di geopotenziale e pressione concentrati su **${maxPt?maxPt.n:'Nord Africa'}** (${maxPt?Math.round(maxPt.v):Math.round(su)} dam) in estensione verso il comparto alpino-centro-occidentale.`;
+    s1=`${dayCtx}${AIFS_DAY===0?'il quadro europeo vede':'il quadro europeo vedrà'} una **rimonta anticiclonica** dal Nord Africa/Mediterraneo, con i massimi di geopotenziale e pressione concentrati su **${maxPt?maxPt.n:'Nord Africa'}** (${maxPt?Math.round(maxPt.v):Math.round(su)} dam) in estensione verso il comparto alpino-centro-occidentale.`;
   } else if(dOvestCentro!=null&&dOvestCentro>6){
-    s1=`Un **promontorio anticiclonico atlantico** (massimo su **${maxPt?maxPt.n:'settore atlantico'}**, ${maxPt?Math.round(maxPt.v):Math.round(ow)} dam) si estende verso l'Europa centrale, garantendo stabilità diffusa.`;
+    s1=`${dayCtx}${AIFS_DAY===0?'un promontorio anticiclonico atlantico si estende':'un promontorio anticiclonico atlantico si estenderà'} (massimo su **${maxPt?maxPt.n:'settore atlantico'}**, ${maxPt?Math.round(maxPt.v):Math.round(ow)} dam) verso l'Europa centrale, garantendo stabilità diffusa.`;
   } else {
-    s1=`La circolazione europea appare **debole e poco organizzata**, senza una struttura sinottica dominante (gradienti Ovest-Centro di soli ${dOvestCentro!=null?Math.round(Math.abs(dOvestCentro)):'--'} dam). Massimo relativo su **${maxPt?maxPt.n:'--'}** (${maxPt?Math.round(maxPt.v):'--'} dam), minimo su **${minPt?minPt.n:'--'}** (${minPt?Math.round(minPt.v):'--'} dam).`;
+    s1=`${dayCtx}${AIFS_DAY===0?'la circolazione europea appare':'la circolazione europea sarà'} **debole e poco organizzata**, senza una struttura sinottica dominante (gradienti Ovest-Centro di soli ${dOvestCentro!=null?Math.round(Math.abs(dOvestCentro)):'--'} dam). Massimo relativo su **${maxPt?maxPt.n:'--'}** (${maxPt?Math.round(maxPt.v):'--'} dam), minimo su **${minPt?minPt.n:'--'}** (${minPt?Math.round(minPt.v):'--'} dam).`;
   }
 
-  // ── Frase 2: evoluzione temporale con dettaglio traiettoria E caratteristiche del cambio ──
+  // ── Frase 2: PRIMA verifica se la transizione è già in corso arrivando a questo giorno ──
+  // (confronto col giorno precedente nella sequenza), SOLO se non lo è cerca una transizione futura
   let s2='';
-  if(transition){
+  const deltaFromPrev = prev&&prev.fvg!=null&&cur.fvg!=null ? cur.fvg-prev.fvg : null;
+  const alreadyTransitioning = deltaFromPrev!=null && Math.abs(deltaFromPrev)>=3;
+
+  if(alreadyTransitioning){
+    // Il cambiamento è già avvenuto/in corso arrivando a questo giorno specifico
+    const dirPrev = deltaFromPrev<0?'in calo':'in aumento';
+    const prevLbl=aifsDayLabel(AIFS_DAY-1);
+    if(dirPrev==='in calo'){
+      const wasAnticiclonico = prev.fvg>578;
+      if(wasAnticiclonico&&cur.fvg<570){
+        s2=` Rispetto a **${prevLbl}**, in questa giornata il cedimento della struttura anticiclonica risulta già evidente (Z500 da ${Math.round(prev.fvg)} a ${Math.round(cur.fvg)} dam) — è il momento in cui **il peggioramento si concretizza**: il flusso instabile${sysClass?` (${sysClass.tipo})`:''} è atteso interessare direttamente il FVG proprio in questa fase, con aumento dell'umidità in quota e condizioni favorevoli a fenomeni organizzati.`;
+      } else {
+        s2=` Rispetto a **${prevLbl}**, il geopotenziale è già sceso sensibilmente (da ${Math.round(prev.fvg)} a ${Math.round(cur.fvg)} dam) — **la fase più instabile si colloca proprio in questa giornata**, con condizioni favorevoli a fenomeni di maltempo diffuso.`;
+      }
+    } else {
+      s2=` Rispetto a **${prevLbl}**, il geopotenziale è già risalito sensibilmente (da ${Math.round(prev.fvg)} a ${Math.round(cur.fvg)} dam) — **la stabilizzazione si concretizza proprio in questa giornata**, con miglioramento netto delle condizioni.`;
+    }
+  } else if(transition){
     const lbl=aifsDayLabel(transition.day);
     const dir=next&&cur.fvg!=null&&next.fvg!=null&&next.fvg<cur.fvg?'in calo':'in aumento';
     const idxTrans=transition.day*24;
     const gridValsTrans=AIFS_GRID_DATA.map(p=>({n:p.n,v:p.z500[idxTrans]!=null?p.z500[idxTrans]/10:null})).filter(p=>p.v!=null);
     const minPtTrans=gridValsTrans.length?gridValsTrans.reduce((a,b)=>b.v<a.v?b:a):null;
-    const maxPtTrans=gridValsTrans.length?gridValsTrans.reduce((a,b)=>b.v>a.v?b:a):null;
     const traiettoriaTxt = (minPt&&minPtTrans&&minPt.n!==minPtTrans.n)
-      ? ` Il punto di minima pressione in quota — cioè il cuore del sistema instabile, cioè la zona dove l'atmosfera è più "aperta" e favorevole al maltempo — è atteso spostarsi da **${minPt.n}** verso **${minPtTrans.n}**, indicando la direzione di avanzamento del sistema,`
+      ? ` Il punto di minima pressione in quota — cioè il cuore del sistema instabile, la zona dove l'atmosfera è più "aperta" e favorevole al maltempo — è atteso spostarsi da **${minPt.n}** verso **${minPtTrans.n}**, indicando la direzione di avanzamento del sistema,`
       : '';
 
-    // Classifica il TIPO di transizione, non solo la direzione numerica
     const valAfter=aifsZoneAvg(transition.day);
     let transType='', transCaratteristiche='';
     if(dir==='in calo'){
-      // Distingue: cedimento anticiclonico vs ingresso saccatura vs semplice raffreddamento
       const wasAnticiclonico = fvg>578;
       const zAfter=valAfter?.fvg;
       if(wasAnticiclonico&&zAfter!=null&&zAfter<570){
@@ -2377,19 +2393,19 @@ function renderAifsSynoptic(){
       }
     }
 
-    s2=` Nei prossimi giorni il pattern è atteso evolvere con **${transType}**, con il cambiamento più marcato **tra ${dayNow} e ${lbl}** (variazione di ${Math.round(transition.delta)} dam sul FVG).${traiettoriaTxt} In pratica, ${transCaratteristiche}.`;
+    s2=` A partire da **${dayNow}**, il pattern è atteso evolvere con **${transType}**, con il cambiamento più marcato **tra ${dayNow} e ${lbl}** (variazione di ${Math.round(transition.delta)} dam sul FVG).${traiettoriaTxt} In pratica, ${transCaratteristiche}.`;
     if(dir==='in calo'){
       s2+=` ${sysClass&&(sysClass.tipo.includes('saccatura')||sysClass.tipo.includes('cavo'))?`Il sistema in arrivo (${sysClass.tipo}) con il relativo fronte perturbato`:'Il fronte perturbato associato'} è atteso interessare l'arco alpino orientale entro **${lbl}**.`;
     }
   } else if(next&&cur.fvg!=null&&next.fvg!=null){
     const dFvg=next.fvg-cur.fvg;
     if(Math.abs(dFvg)<3){
-      s2=` Il pattern **si mantiene sostanzialmente stazionario** nelle prossime 24 ore (Z500 FVG da ${Math.round(cur.fvg)} a ${Math.round(next.fvg)} dam), senza variazioni significative attese a breve — condizioni sinottiche persistenti.`;
+      s2=` Il pattern **si mantiene sostanzialmente stazionario** nelle 24 ore successive a **${dayNow}** (Z500 FVG da ${Math.round(cur.fvg)} a ${Math.round(next.fvg)} dam), senza variazioni significative attese — condizioni sinottiche persistenti.`;
     } else {
       const caratt = dFvg>0
         ? 'segnale di rinforzo della subsidenza, coerente con consolidamento della stabilità'
         : 'segnale di indebolimento del campo di alta pressione, possibile aumento dell\'instabilità nelle ore successive';
-      s2=` Nelle prossime 24 ore si osserva una **tendenza ${dFvg>0?'al rialzo':'al calo'}** del geopotenziale sul FVG (da ${Math.round(cur.fvg)} a ${Math.round(next.fvg)} dam) — ${caratt}.`;
+      s2=` Nelle 24 ore successive a **${dayNow}** si osserva una **tendenza ${dFvg>0?'al rialzo':'al calo'}** del geopotenziale sul FVG (da ${Math.round(cur.fvg)} a ${Math.round(next.fvg)} dam) — ${caratt}.`;
     }
   }
 
@@ -2398,9 +2414,9 @@ function renderAifsSynoptic(){
   if(isCutoff){
     s3=` Per il **Friuli Venezia Giulia** questo si traduce tipicamente in un ruolo marginale rispetto al sistema instabile, con il rischio maggiore che rimane concentrato più a sud: probabile prevalenza di **flusso secco** con bassa attività convettiva locale.`;
   } else if(fvg<568&&(dOvestCentro!=null&&dOvestCentro<-6)){
-    s3=` Sul **FVG** il valore attuale di Z500 (${Math.round(fvg)} dam) indica un coinvolgimento già diretto nella dinamica instabile — condizioni compatibili con **fenomeni organizzati**, specie se confermato dal dettaglio dei parametri locali (CAPE, shear) nella tab Monitor.`;
+    s3=` Sul **FVG** il valore di Z500 (${Math.round(fvg)} dam) in questa giornata indica un coinvolgimento già diretto nella dinamica instabile — condizioni compatibili con **fenomeni organizzati**, specie se confermato dal dettaglio dei parametri locali (CAPE, shear) nella tab Monitor.`;
   } else if(fvg>578){
-    s3=` Sul **FVG** il geopotenziale elevato (${Math.round(fvg)} dam) è coerente con **stabilità e possibile rialzo termico**, bassa probabilità di fenomeni organizzati nell'immediato.`;
+    s3=` Sul **FVG** il geopotenziale elevato (${Math.round(fvg)} dam) in questa giornata è coerente con **stabilità e possibile rialzo termico**, bassa probabilità di fenomeni organizzati.`;
   } else {
     s3=` Sul **FVG** (Z500 ${Math.round(fvg)} dam) la situazione resta da monitorare — il segnale sinottico non è ancora decisivo, verificare l'evoluzione dei parametri locali per il dettaglio a breve termine.`;
   }
