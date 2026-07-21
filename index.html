@@ -2231,14 +2231,19 @@ function aifsTilt(cur){
 // Trova il giorno (0-2) in cui avviene il cambio di pattern più marcato sul FVG
 function aifsFindTransitionDay(){
   if(!AIFS_GRID_DATA) return null;
-  const vals=[0,1,2,3,4,5,6].map(d=>aifsZoneAvg(d));
+  // Cerca la transizione a partire dal giorno attualmente selezionato, non sempre da oggi —
+  // altrimenti il giorno di partenza e quello di transizione possono coincidere
+  // (es. "tra sabato e sabato" se +4 è già il giorno di massimo cambiamento)
+  const startDay=AIFS_DAY;
+  const vals={};
+  for(let d=startDay;d<=6;d++) vals[d]=aifsZoneAvg(d);
   let maxDelta=0, dayIdx=null;
-  for(let i=0;i<vals.length-1;i++){
+  for(let i=startDay;i<6;i++){
     if(vals[i]?.fvg==null||vals[i+1]?.fvg==null) continue;
     const delta=Math.abs(vals[i+1].fvg-vals[i].fvg);
     if(delta>maxDelta){maxDelta=delta;dayIdx=i+1;}
   }
-  return maxDelta>=3?{day:dayIdx,delta:maxDelta}:null;
+  return maxDelta>=3&&dayIdx!==startDay?{day:dayIdx,delta:maxDelta}:null;
 }
 
 function aifsDayLabel(d){
