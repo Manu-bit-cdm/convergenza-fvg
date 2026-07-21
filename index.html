@@ -332,10 +332,14 @@ button,.dir-btn{touch-action:manipulation;min-height:36px;cursor:pointer}
 <div class="sc" style="margin-bottom:11px">
   <div style="font-size:9px;color:#06B6D4;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">🌍 Quadro Sinottico Euromediterraneo</div>
   <div style="font-size:8px;color:#334155;margin-bottom:8px">Basato su Z500 AIFS, confronto tra macro-zone (Ovest/Nord/Est/Sud/Centro)</div>
-  <div style="display:flex;gap:6px;margin-bottom:10px">
-    <button class="mbtn active" data-d="0" onclick="setAifsDay(this,0)">Oggi</button>
-    <button class="mbtn" data-d="1" onclick="setAifsDay(this,1)">+1 giorno</button>
-    <button class="mbtn" data-d="2" onclick="setAifsDay(this,2)">+2 giorni</button>
+  <div style="display:flex;gap:5px;margin-bottom:10px;overflow-x:auto;padding-bottom:2px">
+    <button class="mbtn active" data-d="0" onclick="setAifsDay(this,0)" style="flex-shrink:0">Oggi</button>
+    <button class="mbtn" data-d="1" onclick="setAifsDay(this,1)" style="flex-shrink:0">+1</button>
+    <button class="mbtn" data-d="2" onclick="setAifsDay(this,2)" style="flex-shrink:0">+2</button>
+    <button class="mbtn" data-d="3" onclick="setAifsDay(this,3)" style="flex-shrink:0">+3</button>
+    <button class="mbtn" data-d="4" onclick="setAifsDay(this,4)" style="flex-shrink:0">+4</button>
+    <button class="mbtn" data-d="5" onclick="setAifsDay(this,5)" style="flex-shrink:0">+5</button>
+    <button class="mbtn" data-d="6" onclick="setAifsDay(this,6)" style="flex-shrink:0">+6</button>
   </div>
   <div id="aifsSynopticBody"><div style="text-align:center;padding:12px;color:#475569;font-size:10px">⏳ Caricamento...</div></div>
 </div>
@@ -2079,7 +2083,7 @@ async function loadAifs(){
   try{
     const gridResults=await Promise.all(EU_GRID.map(async pt=>{
       try{
-        const url=`https://api.open-meteo.com/v1/forecast?latitude=${pt.lat}&longitude=${pt.lon}&hourly=geopotential_height_500hPa&models=ecmwf_aifs025_single&forecast_days=3&timezone=Europe%2FRome`;
+        const url=`https://api.open-meteo.com/v1/forecast?latitude=${pt.lat}&longitude=${pt.lon}&hourly=geopotential_height_500hPa&models=ecmwf_aifs025_single&forecast_days=7&timezone=Europe%2FRome`;
         const d=await fj(url);
         return{...pt,z500:d.hourly.geopotential_height_500hPa||[],times:d.hourly.time||[]};
       }catch(e){return{...pt,z500:[],times:[]};}
@@ -2227,7 +2231,7 @@ function aifsTilt(cur){
 // Trova il giorno (0-2) in cui avviene il cambio di pattern più marcato sul FVG
 function aifsFindTransitionDay(){
   if(!AIFS_GRID_DATA) return null;
-  const vals=[0,1,2].map(d=>aifsZoneAvg(d));
+  const vals=[0,1,2,3,4,5,6].map(d=>aifsZoneAvg(d));
   let maxDelta=0, dayIdx=null;
   for(let i=0;i<vals.length-1;i++){
     if(vals[i]?.fvg==null||vals[i+1]?.fvg==null) continue;
@@ -2254,7 +2258,7 @@ function renderAifsSynoptic(){
     return;
   }
   const cur=aifsZoneAvg(AIFS_DAY);
-  const next=aifsZoneAvg(Math.min(AIFS_DAY+1,2));
+  const next=aifsZoneAvg(Math.min(AIFS_DAY+1,6));
   const prev=AIFS_DAY>0?aifsZoneAvg(AIFS_DAY-1):null;
   if(!cur||cur.fvg==null){
     el.innerHTML='<div style="text-align:center;padding:12px;color:#475569;font-size:10px">Dati insufficienti per l\'analisi</div>';
