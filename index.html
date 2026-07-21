@@ -2335,30 +2335,61 @@ function renderAifsSynoptic(){
     s1=`La circolazione europea appare **debole e poco organizzata**, senza una struttura sinottica dominante (gradienti Ovest-Centro di soli ${dOvestCentro!=null?Math.round(Math.abs(dOvestCentro)):'--'} dam). Massimo relativo su **${maxPt?maxPt.n:'--'}** (${maxPt?Math.round(maxPt.v):'--'} dam), minimo su **${minPt?minPt.n:'--'}** (${minPt?Math.round(minPt.v):'--'} dam).`;
   }
 
-  // ── Frase 2: evoluzione temporale con dettaglio traiettoria ──
+  // ── Frase 2: evoluzione temporale con dettaglio traiettoria E caratteristiche del cambio ──
   let s2='';
   if(transition){
     const lbl=aifsDayLabel(transition.day);
     const dir=next&&cur.fvg!=null&&next.fvg!=null&&next.fvg<cur.fvg?'in calo':'in aumento';
-    // Traiettoria: confronta la posizione del minimo tra oggi e il giorno di transizione
     const idxTrans=transition.day*24;
     const gridValsTrans=AIFS_GRID_DATA.map(p=>({n:p.n,v:p.z500[idxTrans]!=null?p.z500[idxTrans]/10:null})).filter(p=>p.v!=null);
     const minPtTrans=gridValsTrans.length?gridValsTrans.reduce((a,b)=>b.v<a.v?b:a):null;
+    const maxPtTrans=gridValsTrans.length?gridValsTrans.reduce((a,b)=>b.v>a.v?b:a):null;
     const traiettoriaTxt = (minPt&&minPtTrans&&minPt.n!==minPtTrans.n)
       ? ` Il centro d'azione è atteso spostarsi da **${minPt.n}** verso **${minPtTrans.n}**,`
       : '';
-    s2=` Nei prossimi giorni il pattern è atteso evolvere, con un cambiamento più marcato **tra ${dayNow} e ${lbl}** (variazione di ${Math.round(transition.delta)} dam sul FVG, ${dir}).${traiettoriaTxt} `;
+
+    // Classifica il TIPO di transizione, non solo la direzione numerica
+    const valAfter=aifsZoneAvg(transition.day);
+    let transType='', transCaratteristiche='';
     if(dir==='in calo'){
-      s2+=`La tendenza è verso un **peggioramento delle condizioni**${sysClass&&(sysClass.tipo.includes('saccatura')||sysClass.tipo.includes('cavo'))?`, con il sistema (${sysClass.tipo}) e il fronte perturbato annesso`:', con il fronte perturbato'} atteso interessare l'arco alpino orientale entro **${lbl}**.`;
-    }else{
-      s2+=`La tendenza è verso una **stabilizzazione**, con rialzo del geopotenziale e attenuazione dell'instabilità.`;
+      // Distingue: cedimento anticiclonico vs ingresso saccatura vs semplice raffreddamento
+      const wasAnticiclonico = fvg>578;
+      const zAfter=valAfter?.fvg;
+      if(wasAnticiclonico&&zAfter!=null&&zAfter<570){
+        transType='cedimento della struttura anticiclonica con subentro di flusso perturbato';
+        transCaratteristiche='il campo di alta pressione attualmente presente si ritirerà, aprendo la strada a un flusso più instabile da ovest/nord-ovest — atteso un aumento dell\'umidità in quota e delle condizioni favorevoli a fenomeni organizzati';
+      } else if(zAfter!=null&&zAfter<566){
+        transType='approfondimento della saccatura con possibile ingresso di aria fredda in quota';
+        transCaratteristiche='il calo del geopotenziale è marcato — tipico di un affondo depressionario con calo delle temperature in quota (T850) e aumento dello shear, condizioni favorevoli a fenomeni anche intensi';
+      } else {
+        transType='transizione verso condizioni più instabili';
+        transCaratteristiche='il calo di geopotenziale indica un\'atmosfera in fase di destabilizzazione, con probabile aumento della nuvolosità e dell\'instabilità nei bassi-medi strati';
+      }
+    } else {
+      const wasInstabile = fvg<572;
+      const zAfter=valAfter?.fvg;
+      if(wasInstabile&&zAfter!=null&&zAfter>578){
+        transType='rimonta anticiclonica con rapida stabilizzazione';
+        transCaratteristiche='il sistema instabile attualmente presente verrà rimpiazzato da un promontorio di alta pressione — atteso un deciso miglioramento con cieli sereni e calo dell\'attività convettiva';
+      } else {
+        transType='rinforzo del campo di alta pressione';
+        transCaratteristiche='il geopotenziale in aumento indica subsidenza in rinforzo — condizioni di stabilità in consolidamento, possibile rialzo termico specie in pianura';
+      }
+    }
+
+    s2=` Nei prossimi giorni il pattern è atteso evolvere con **${transType}**, con il cambiamento più marcato **tra ${dayNow} e ${lbl}** (variazione di ${Math.round(transition.delta)} dam sul FVG).${traiettoriaTxt} In pratica, ${transCaratteristiche}.`;
+    if(dir==='in calo'){
+      s2+=` ${sysClass&&(sysClass.tipo.includes('saccatura')||sysClass.tipo.includes('cavo'))?`Il sistema in arrivo (${sysClass.tipo}) con il relativo fronte perturbato`:'Il fronte perturbato associato'} è atteso interessare l'arco alpino orientale entro **${lbl}**.`;
     }
   } else if(next&&cur.fvg!=null&&next.fvg!=null){
     const dFvg=next.fvg-cur.fvg;
     if(Math.abs(dFvg)<3){
-      s2=` Il pattern **si mantiene sostanzialmente stazionario** nelle prossime 24 ore (Z500 FVG da ${Math.round(cur.fvg)} a ${Math.round(next.fvg)} dam), senza variazioni significative attese a breve.`;
+      s2=` Il pattern **si mantiene sostanzialmente stazionario** nelle prossime 24 ore (Z500 FVG da ${Math.round(cur.fvg)} a ${Math.round(next.fvg)} dam), senza variazioni significative attese a breve — condizioni sinottiche persistenti.`;
     } else {
-      s2=` Nelle prossime 24 ore si osserva una **tendenza ${dFvg>0?'al rialzo':'al calo'}** del geopotenziale sul FVG (da ${Math.round(cur.fvg)} a ${Math.round(next.fvg)} dam).`;
+      const caratt = dFvg>0
+        ? 'segnale di rinforzo della subsidenza, coerente con consolidamento della stabilità'
+        : 'segnale di indebolimento del campo di alta pressione, possibile aumento dell\'instabilità nelle ore successive';
+      s2=` Nelle prossime 24 ore si osserva una **tendenza ${dFvg>0?'al rialzo':'al calo'}** del geopotenziale sul FVG (da ${Math.round(cur.fvg)} a ${Math.round(next.fvg)} dam) — ${caratt}.`;
     }
   }
 
