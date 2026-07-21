@@ -2345,7 +2345,7 @@ function renderAifsSynoptic(){
     const minPtTrans=gridValsTrans.length?gridValsTrans.reduce((a,b)=>b.v<a.v?b:a):null;
     const maxPtTrans=gridValsTrans.length?gridValsTrans.reduce((a,b)=>b.v>a.v?b:a):null;
     const traiettoriaTxt = (minPt&&minPtTrans&&minPt.n!==minPtTrans.n)
-      ? ` Il centro d'azione è atteso spostarsi da **${minPt.n}** verso **${minPtTrans.n}**,`
+      ? ` Il punto di minima pressione in quota — cioè il cuore del sistema instabile, cioè la zona dove l'atmosfera è più "aperta" e favorevole al maltempo — è atteso spostarsi da **${minPt.n}** verso **${minPtTrans.n}**, indicando la direzione di avanzamento del sistema,`
       : '';
 
     // Classifica il TIPO di transizione, non solo la direzione numerica
@@ -2430,7 +2430,7 @@ function renderAifsSynoptic(){
     </div>
     ${s4?`<div style="margin-top:10px;padding:7px 9px;background:#0A0A00;border-radius:6px;font-size:9.5px;color:#94A3B8;line-height:1.5">${s4}</div>`:''}
     <div style="margin-top:9px;font-size:8px;color:#1E3050">
-      Z500: FVG ${Math.round(fvg)}dam · Atlantico ${cur.atlantico!=null?Math.round(cur.atlantico):'--'} · Artico ${cur.artico!=null?Math.round(cur.artico):'--'} · Est ${es!=null?Math.round(es):'--'} · It.Sud ${cur.italiaSud!=null?Math.round(cur.italiaSud):'--'} · N.Africa ${cur.sudOvest!=null?Math.round(cur.sudOvest):'--'}
+      Dati grezzi (${dayNow}): Z500 FVG ${Math.round(fvg)}dam · Atlantico ${cur.atlantico!=null?Math.round(cur.atlantico):'--'} · Artico ${cur.artico!=null?Math.round(cur.artico):'--'} · Est ${es!=null?Math.round(es):'--'} · It.Sud ${cur.italiaSud!=null?Math.round(cur.italiaSud):'--'} · N.Africa ${cur.sudOvest!=null?Math.round(cur.sudOvest):'--'}
     </div>`;
 }
 
