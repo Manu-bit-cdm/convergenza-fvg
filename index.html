@@ -340,6 +340,14 @@ button,.dir-btn{touch-action:manipulation;min-height:36px;cursor:pointer}
   <div id="aifsSynopticBody"><div style="text-align:center;padding:12px;color:#475569;font-size:10px">⏳ Caricamento...</div></div>
 </div>
 
+<!-- TRACCIAMENTO PERSISTENZA SEGNALE -->
+<div class="sc" style="margin-bottom:11px">
+  <div style="font-size:9px;color:#06B6D4;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">📌 Monitoraggio Evento</div>
+  <div style="font-size:8px;color:#334155;margin-bottom:8px">Traccia un giorno specifico nel tempo per vedere se la previsione si conferma o cambia negli aggiornamenti successivi</div>
+  <div id="pinControls"></div>
+  <div id="pinHistory" style="margin-top:8px"></div>
+</div>
+
 <div class="mono" style="text-align:center;margin-top:10px;margin-bottom:4px;font-size:9px;color:#1A2535">AIFS · ECMWF AI Forecasting System · dati Open-Meteo</div>
 
 </div><!-- fine pageAifs -->
@@ -2078,6 +2086,7 @@ async function loadAifs(){
     }));
     AIFS_GRID_DATA=gridResults;
     renderAifsSynoptic();
+    if(typeof renderPinPanel==='function') renderPinPanel();
   }catch(e){console.warn('AIFS grid:',e.message);}
 }
 
@@ -2164,6 +2173,7 @@ function setAifsDay(btn,d){
   document.querySelectorAll('#pageAifs .mbtn[data-d]').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
   renderAifsSynoptic();
+  if(typeof renderPinPanel==='function') renderPinPanel();
 }
 
 // Raggruppa i punti griglia in macro-zone e calcola Z500 medio per zona
@@ -2209,6 +2219,33 @@ function aifsTilt(cur){
   return diagNW_SE - diagNE_SW;
 }
 
+// ═══════════════════════════════════════════════════
+// BOLLETTINO NARRATIVO — compone prosa fluida dai dati Z500/tilt/ensemble
+// invece di card separate. Cambia dinamicamente con giorno e dati aggiornati.
+// ═══════════════════════════════════════════════════
+
+// Trova il giorno (0-2) in cui avviene il cambio di pattern più marcato sul FVG
+function aifsFindTransitionDay(){
+  if(!AIFS_GRID_DATA) return null;
+  const vals=[0,1,2].map(d=>aifsZoneAvg(d));
+  let maxDelta=0, dayIdx=null;
+  for(let i=0;i<vals.length-1;i++){
+    if(vals[i]?.fvg==null||vals[i+1]?.fvg==null) continue;
+    const delta=Math.abs(vals[i+1].fvg-vals[i].fvg);
+    if(delta>maxDelta){maxDelta=delta;dayIdx=i+1;}
+  }
+  return maxDelta>=3?{day:dayIdx,delta:maxDelta}:null;
+}
+
+function aifsDayLabel(d){
+  const dt=new Date();
+  dt.setDate(dt.getDate()+d);
+  const gg=['domenica','lunedì','martedì','mercoledì','giovedì','venerdì','sabato'][dt.getDay()];
+  if(d===0) return 'oggi';
+  if(d===1) return 'domani';
+  return gg;
+}
+
 function renderAifsSynoptic(){
   const el=document.getElementById('aifsSynopticBody');
   if(!el) return;
@@ -2227,98 +2264,204 @@ function renderAifsSynoptic(){
   const ow=cur.ovest, no=cur.nord, es=cur.est, su=cur.sud, ce=cur.centro, fvg=cur.fvg;
   const dOvestCentro = ow!=null&&ce!=null ? ow-ce : null;
   const dNordSud = no!=null&&su!=null ? no-su : null;
-  const dEstCentro = es!=null&&ce!=null ? es-ce : null;
   const dSudFvg = su!=null&&fvg!=null ? su-fvg : null;
-
-  // ── Check cut-off: minimo isolato a sud/sud-est mentre il resto è riequilibrato ──
   const isCutoff = cur.italiaSud!=null && cur.centro!=null && cur.artico!=null
-    && (cur.centro-cur.italiaSud)>4
-    && Math.abs(cur.artico-cur.centro)<6; // resto d'Europa relativamente omogeneo
+    && (cur.centro-cur.italiaSud)>4 && Math.abs(cur.artico-cur.centro)<6;
 
-  let pattern='', detail='', implic='', col='#64748B', icon='〰️';
+  const dayNow=aifsDayLabel(AIFS_DAY);
+  const transition=aifsFindTransitionDay();
 
+  // ── Frase 1: quadro attuale del comparto europeo ──
+  let s1='';
   if(isCutoff){
-    pattern='Goccia fredda / cut-off in area mediterranea';
-    icon='🎯'; col='#A78BFA';
-    detail=`Minimo isolato su Italia meridionale (${Math.round(cur.italiaSud)}dam) mentre il resto d'Europa è relativamente riequilibrato (Centro ${Math.round(cur.centro)}dam) — saccatura staccata dal flusso principale`;
-    implic='Il FVG resta tipicamente ai margini o "in ombra" rispetto al cut-off: l\'energia convettiva si concentra a sud (Centro-Sud Italia), mentre da voi prevale spesso un flusso residuo più secco. Bassa probabilità di fenomeni organizzati, salvo interazioni locali.';
+    s1=`Il comparto europeo mostra al momento una **goccia fredda isolata** sull'Italia meridionale (Z500 ${Math.round(cur.italiaSud)} dam), separata dal flusso principale che resta relativamente riequilibrato più a nord (${Math.round(cur.centro)} dam sul comparto centro-europeo).`;
   } else if(dOvestCentro!=null&&dOvestCentro<-6){
-    const spd = prev&&prev.fvg!=null ? Math.abs(fvg-prev.fvg) : null;
-    const velTxt = spd!=null ? (spd>4?'in rapido transito':spd>1.5?'in transito moderato':'quasi stazionaria') : '';
-    pattern=`Saccatura atlantica in approfondimento su Europa occidentale${velTxt?' — '+velTxt:''}`;
-    icon='🌀'; col='#38BDF8';
-    detail=`Ovest ${Math.round(ow)}dam vs Centro ${Math.round(ce)}dam (Δ${Math.round(dOvestCentro)}dam) — gradiente marcato indica minimo di geopotenziale in transito verso est`;
-    implic=fvg<568?'FVG già coinvolto dal minimo — flusso instabile da SW/W probabile, condizioni per fenomeni organizzati.':'FVG ancora ai margini orientali della saccatura — possibile coinvolgimento diretto nelle prossime 24-48h se il sistema avanza secondo tendenza.';
+    s1=`Il comparto europeo è dominato da un **flusso atlantico in intensificazione**, con una saccatura depressionaria che si approfondisce sul settore occidentale (Z500 ${Math.round(ow)} dam) mentre l'Europa centrale resta relativamente più alta (${Math.round(ce)} dam).`;
   } else if(dNordSud!=null&&dNordSud>10&&no>576){
-    pattern='Blocco anticiclonico scandinavo';
-    icon='🧊'; col='#818CF8';
-    detail=`Artico/Scandinavia ${Math.round(no)}dam elevato, gradiente con Sud di ${Math.round(dNordSud)}dam — configurazione a blocco, flusso zonale deviato verso sud`;
-    implic='Possibile richiamo di aria fredda continentale verso il Mediterraneo (occhio a episodi di Bora rinforzata), oppure flusso perturbato deviato a sud delle Alpi direttamente sul FVG.';
+    s1=`Un **blocco anticiclonico** insiste sul settore scandinavo-artico (Z500 ${Math.round(no)} dam), deviando il flusso atlantico verso latitudini più meridionali.`;
   } else if(dSudFvg!=null&&dSudFvg>4&&su>580){
-    pattern='Rimonta anticiclonica nordafricana/subtropicale';
-    icon='☀️'; col='#F59E0B';
-    detail=`Sud ${Math.round(su)}dam alto, gradiente verso FVG di ${Math.round(dSudFvg)}dam — promontorio in estensione verso il Mediterraneo centrale`;
-    implic=fvg>578?'FVG già sotto influenza anticiclonica — stabilità e caldo in rinforzo probabili, bassa attività convettiva attesa.':'Anticiclone in avvicinamento da sud — tendenza a stabilizzazione e rialzo termico nelle prossime 24-48h.';
-  } else if(dEstCentro!=null&&Math.abs(dEstCentro)<3&&dOvestCentro!=null&&Math.abs(dOvestCentro)<3){
-    pattern='Flusso zonale debole, circolazione poco organizzata';
-    icon='〰️'; col='#64748B';
-    detail=`Gradienti deboli su tutte le zone (Est-Centro Δ${Math.round(dEstCentro)}dam, Ovest-Centro Δ${Math.round(dOvestCentro)}dam) — nessuna struttura sinottica dominante, onda corta debole in transito`;
-    implic='Circolazione debole e poco organizzata — probabile prevalenza di dinamiche locali (termiche, brezze, orografia) più che forzanti sinottiche su scala europea.';
+    s1=`Il quadro europeo vede una **rimonta anticiclonica** dal Nord Africa/Mediterraneo (Z500 ${Math.round(su)} dam) in estensione verso il comparto alpino.`;
   } else if(dOvestCentro!=null&&dOvestCentro>6){
-    pattern='Promontorio anticiclonico atlantico esteso verso l\'Europa centrale';
-    icon='🌤️'; col='#22C55E';
-    detail=`Ovest ${Math.round(ow)}dam elevato rispetto al Centro (Δ+${Math.round(dOvestCentro)}dam) — cuneo di alta pressione (tipo "rimonta delle Azzorre") in estensione da ovest`;
-    implic='Stabilità in rinforzo sul comparto alpino-padano, FVG compreso — bassa probabilità di fenomeni organizzati nei prossimi giorni, possibile foschia/nebbie mattutine se persiste.';
+    s1=`Un **promontorio anticiclonico atlantico** (Z500 ${Math.round(ow)} dam) si estende verso l'Europa centrale, garantendo stabilità diffusa.`;
   } else {
-    pattern='Pattern misto, fase di transizione';
-    icon='🔄'; col='#94A3B8';
-    detail=`Gradienti non riconducibili a un pattern singolo dominante — fase di transizione tra regimi diversi, onda in riorganizzazione`;
-    implic='Evoluzione incerta a scala sinottica — monitorare i parametri locali (CAPE, shear, K Index) per il dettaglio a breve termine, dove il segnale sinottico è debole prevale la variabilità locale.';
+    s1=`La circolazione europea appare **debole e poco organizzata**, senza una struttura sinottica dominante (gradienti Ovest-Centro di soli ${dOvestCentro!=null?Math.round(Math.abs(dOvestCentro)):'--'} dam).`;
   }
 
-  // ── Tilt della saccatura (solo se pattern è saccatura o transizione) ──
-  let tiltTxt='';
-  const tilt=aifsTilt(cur);
-  if(tilt!=null&&(pattern.includes('Saccatura')||pattern.includes('transizione'))){
-    const tiltDesc = tilt<-4
-      ? 'Tilt negativo (onda aperta verso ovest) — fase dinamica, favorevole a ciclogenesi e intensificazione'
-      : tilt>4
-      ? 'Tilt positivo (onda inclinata verso sud-est) — fase di riempimento, sistema in indebolimento'
-      : 'Asse pressoché verticale — fase di maturità del sistema';
-    tiltTxt=`<div style="margin-top:6px;font-size:9px;color:#64748B">📐 ${tiltDesc}</div>`;
-  }
-
-  // ── Tendenza giorno successivo ──
-  let trendTxt='';
-  if(next&&next.fvg!=null&&fvg!=null){
-    const dFvg=next.fvg-fvg;
-    if(Math.abs(dFvg)>=3){
-      trendTxt=dFvg>0
-        ?`<div style="margin-top:8px;padding:6px 8px;background:#0A0A00;border-radius:6px;font-size:9px;color:#F59E0B">📈 Z500 sul FVG in aumento di ${Math.round(dFvg)}dam nel giorno successivo — tendenza a stabilizzazione/rialzo termico</div>`
-        :`<div style="margin-top:8px;padding:6px 8px;background:#0A0A00;border-radius:6px;font-size:9px;color:#38BDF8">📉 Z500 sul FVG in calo di ${Math.round(Math.abs(dFvg))}dam nel giorno successivo — tendenza a destabilizzazione, saccatura/aria fredda in avvicinamento</div>`;
+  // ── Frase 2: evoluzione temporale (usa transition se rilevata) ──
+  let s2='';
+  if(transition){
+    const lbl=aifsDayLabel(transition.day);
+    const dir=next&&cur.fvg!=null&&next.fvg!=null&&next.fvg<cur.fvg?'in calo':'in aumento';
+    s2=` Nei prossimi giorni il pattern è atteso evolvere, con un cambiamento più marcato **tra ${dayNow} e ${lbl}** (variazione di ${Math.round(transition.delta)} dam sul FVG, ${dir}) — `;
+    if(dir==='in calo'){
+      s2+=`la tendenza è verso un **peggioramento delle condizioni**, con il fronte perturbato atteso interessare l'arco alpino orientale entro **${lbl}**.`;
+    }else{
+      s2+=`la tendenza è verso una **stabilizzazione**, con rialzo del geopotenziale e attenuazione dell'instabilità.`;
+    }
+  } else if(next&&cur.fvg!=null&&next.fvg!=null){
+    const dFvg=next.fvg-cur.fvg;
+    if(Math.abs(dFvg)<3){
+      s2=` Il pattern **si mantiene sostanzialmente stazionario** nelle prossime 24 ore (Z500 FVG da ${Math.round(cur.fvg)} a ${Math.round(next.fvg)} dam), senza variazioni significative attese a breve.`;
     } else {
-      trendTxt=`<div style="margin-top:8px;padding:6px 8px;background:#05080F;border-radius:6px;font-size:9px;color:#475569">➡️ Z500 stazionario nel giorno successivo (Δ${dFvg>=0?'+':''}${Math.round(dFvg)}dam) — pattern persistente</div>`;
+      s2=` Nelle prossime 24 ore si osserva una **tendenza ${dFvg>0?'al rialzo':'al calo'}** del geopotenziale sul FVG (da ${Math.round(cur.fvg)} a ${Math.round(next.fvg)} dam).`;
     }
   }
 
+  // ── Frase 3: implicazione diretta per il FVG ──
+  let s3='';
+  if(isCutoff){
+    s3=` Per il **Friuli Venezia Giulia** questo si traduce tipicamente in un ruolo marginale rispetto al sistema instabile, con il rischio maggiore che rimane concentrato più a sud: probabile prevalenza di **flusso secco** con bassa attività convettiva locale.`;
+  } else if(fvg<568&&(dOvestCentro!=null&&dOvestCentro<-6)){
+    s3=` Sul **FVG** il valore attuale di Z500 (${Math.round(fvg)} dam) indica un coinvolgimento già diretto nella dinamica instabile — condizioni compatibili con **fenomeni organizzati**, specie se confermato dal dettaglio dei parametri locali (CAPE, shear) nella tab Monitor.`;
+  } else if(fvg>578){
+    s3=` Sul **FVG** il geopotenziale elevato (${Math.round(fvg)} dam) è coerente con **stabilità e possibile rialzo termico**, bassa probabilità di fenomeni organizzati nell'immediato.`;
+  } else {
+    s3=` Sul **FVG** (Z500 ${Math.round(fvg)} dam) la situazione resta da monitorare — il segnale sinottico non è ancora decisivo, verificare l'evoluzione dei parametri locali per il dettaglio a breve termine.`;
+  }
+
+  // ── Frase 4: attendibilità (ensemble spread se disponibile, altrimenti nota generica) ──
+  let s4='';
+  const daysOut=AIFS_DAY;
+  if(AIFS_ENS&&AIFS_ENS.hourly){
+    const memberKeys=Object.keys(AIFS_ENS.hourly).filter(k=>k.startsWith('geopotential_height_500hPa'));
+    const idx=AIFS_DAY*24;
+    const vals=memberKeys.map(k=>AIFS_ENS.hourly[k]?.[idx]).filter(v=>v!=null).map(v=>v/10);
+    if(vals.length>1){
+      const spread=Math.max(...vals)-Math.min(...vals);
+      const conf=spread<6?'buona':spread<14?'moderata':'bassa';
+      s4=` ⚠️ *Attendibilità*: a ${daysOut} giorn${daysOut===1?'o':'i'} di distanza il segnale mostra un'affidabilità **${conf}** — spread ensemble di ${Math.round(spread)} dam su ${vals.length} membri sul punto FVG.`;
+    }
+  }
+  if(!s4&&daysOut>=2){
+    s4=` ⚠️ A ${daysOut} giorni di distanza il quadro resta indicativo — consigliato monitorare i prossimi aggiornamenti per conferma.`;
+  }
+
+  // Sostituzione markdown-like ** con span colorati
+  const bold=t=>t.replace(/\*\*(.+?)\*\*/g,'<span style="color:#E2E8F0;font-weight:700">$1</span>');
+
   el.innerHTML=`
-    <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px">
-      <div style="font-size:22px;flex-shrink:0">${icon}</div>
-      <div>
-        <div style="font-size:12px;font-weight:700;color:${col};margin-bottom:3px">${pattern}</div>
-        <div style="font-size:9px;color:#64748B;line-height:1.5">${detail}</div>
-        ${tiltTxt}
-      </div>
+    <div style="font-size:11.5px;line-height:1.75;color:#94A3B8">
+      ${bold(s1)}${bold(s2)}${bold(s3)}
     </div>
-    <div style="padding:8px 10px;background:#05080F;border-radius:7px;border-left:2px solid ${col}">
-      <div style="font-size:8px;color:#334155;margin-bottom:2px;text-transform:uppercase;letter-spacing:1px">Conseguenze per il FVG</div>
-      <div style="font-size:10px;color:#94A3B8;line-height:1.4">${implic}</div>
-    </div>
-    ${trendTxt}
-    <div style="margin-top:8px;font-size:8px;color:#1E3050">
-      Z500: FVG ${fvg!=null?Math.round(fvg):'--'}dam · Atlantico ${cur.atlantico!=null?Math.round(cur.atlantico):'--'} · Artico ${cur.artico!=null?Math.round(cur.artico):'--'} · Est ${es!=null?Math.round(es):'--'} · It.Sud ${cur.italiaSud!=null?Math.round(cur.italiaSud):'--'} · N.Africa ${cur.sudOvest!=null?Math.round(cur.sudOvest):'--'}
+    ${s4?`<div style="margin-top:10px;padding:7px 9px;background:#0A0A00;border-radius:6px;font-size:9.5px;color:#94A3B8;line-height:1.5">${s4}</div>`:''}
+    <div style="margin-top:9px;font-size:8px;color:#1E3050">
+      Z500: FVG ${Math.round(fvg)}dam · Atlantico ${cur.atlantico!=null?Math.round(cur.atlantico):'--'} · Artico ${cur.artico!=null?Math.round(cur.artico):'--'} · Est ${es!=null?Math.round(es):'--'} · It.Sud ${cur.italiaSud!=null?Math.round(cur.italiaSud):'--'} · N.Africa ${cur.sudOvest!=null?Math.round(cur.sudOvest):'--'}
     </div>`;
 }
+
+// ═══════════════════════════════════════════════════
+// SISTEMA PIN — traccia la previsione per un giorno specifico nel tempo
+// Salva in localStorage uno snapshot ogni volta che l'utente controlla,
+// permettendo di vedere se il segnale si conferma o sparisce nei giorni successivi
+// ═══════════════════════════════════════════════════
+const PIN_KEY='aifs_pinned_event';
+
+function getPinnedEvent(){
+  try{
+    const raw=localStorage.getItem(PIN_KEY);
+    return raw?JSON.parse(raw):null;
+  }catch(e){return null;}
+}
+
+function savePinnedEvent(ev){
+  try{localStorage.setItem(PIN_KEY,JSON.stringify(ev));}catch(e){console.warn('localStorage:',e.message);}
+}
+
+function clearPinnedEvent(){
+  try{localStorage.removeItem(PIN_KEY);}catch(e){}
+  renderPinPanel();
+}
+
+// Data target in formato leggibile (YYYY-MM-DD) da un offset giorni
+function dateFromOffset(d){
+  const dt=new Date();
+  dt.setDate(dt.getDate()+d);
+  return dt.toISOString().split('T')[0];
+}
+
+function pinCurrentDay(){
+  if(!AIFS_GRID_DATA) return;
+  const cur=aifsZoneAvg(AIFS_DAY);
+  if(!cur||cur.fvg==null) return;
+  const targetDate=dateFromOffset(AIFS_DAY);
+  const existing=getPinnedEvent();
+
+  // Se esiste già un pin per una data diversa, chiedi conferma prima di sovrascrivere
+  if(existing&&existing.targetDate!==targetDate){
+    if(!confirm(`È già tracciato l'evento del ${existing.targetDate}. Vuoi sostituirlo con quello del ${targetDate}?`)) return;
+  }
+
+  const today=new Date().toISOString().split('T')[0];
+  const snapshot={fvg:Math.round(cur.fvg),ovest:cur.ovest!=null?Math.round(cur.ovest):null,checkedOn:today};
+
+  let ev;
+  if(existing&&existing.targetDate===targetDate){
+    // Stesso evento, stesso giorno di controllo? Aggiorna, altrimenti aggiungi nuovo snapshot
+    ev=existing;
+    const alreadyToday=ev.history.find(h=>h.checkedOn===today);
+    if(alreadyToday){
+      Object.assign(alreadyToday,snapshot);
+    }else{
+      ev.history.push(snapshot);
+    }
+  }else{
+    ev={targetDate,history:[snapshot]};
+  }
+  savePinnedEvent(ev);
+  renderPinPanel();
+}
+
+function renderPinPanel(){
+  const ctrl=document.getElementById('pinControls');
+  const hist=document.getElementById('pinHistory');
+  if(!ctrl||!hist) return;
+
+  const targetDate=dateFromOffset(AIFS_DAY);
+  const dayLbl=aifsDayLabel(AIFS_DAY);
+  const pinned=getPinnedEvent();
+
+  ctrl.innerHTML=`
+    <button onclick="pinCurrentDay()" style="width:100%;padding:8px;background:#0E2847;border:1px solid #06B6D4;border-radius:7px;color:#06B6D4;font-size:10px;font-weight:700;cursor:pointer">
+      📌 Traccia previsione per "${dayLbl}" (${targetDate})
+    </button>`;
+
+  if(!pinned){
+    hist.innerHTML='<div style="font-size:9px;color:#334155;text-align:center;padding:8px">Nessun evento tracciato al momento</div>';
+    return;
+  }
+
+  const daysToEvent=Math.round((new Date(pinned.targetDate)-new Date(new Date().toISOString().split('T')[0]))/86400000);
+  const sorted=[...pinned.history].sort((a,b)=>a.checkedOn.localeCompare(b.checkedOn));
+
+  // Calcola se il segnale è "confermato" (variazione fvg piccola tra controlli) o "in cambiamento"
+  let trendNote='';
+  if(sorted.length>=2){
+    const first=sorted[0].fvg, last=sorted[sorted.length-1].fvg;
+    const delta=last-first;
+    if(Math.abs(delta)<4){
+      trendNote=`<div style="font-size:9px;color:#22C55E;margin-top:6px">✓ Segnale confermato — Z500 stabile (Δ${delta>=0?'+':''}${delta}dam dai primi controlli)</div>`;
+    }else{
+      trendNote=`<div style="font-size:9px;color:#EAB308;margin-top:6px">⚠ Segnale in evoluzione — Z500 variato di ${delta>=0?'+':''}${delta}dam dai primi controlli, monitorare</div>`;
+    }
+  }
+
+  hist.innerHTML=`
+    <div style="padding:8px 10px;background:#05080F;border-radius:7px;margin-top:4px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div style="font-size:10px;font-weight:700;color:#E2E8F0">Evento: ${pinned.targetDate} ${daysToEvent>=0?`(tra ${daysToEvent}gg)`:'(passato)'}</div>
+        <button onclick="clearPinnedEvent()" style="background:none;border:none;color:#475569;font-size:9px;cursor:pointer;text-decoration:underline">rimuovi</button>
+      </div>
+      ${sorted.map(h=>{
+        const col=h.fvg<570?'#38BDF8':h.fvg>580?'#F97316':'#EAB308';
+        return `<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #0A1018;font-size:9px">
+          <span style="color:#64748B">Controllo ${h.checkedOn}</span>
+          <span style="color:${col};font-weight:600">Z500 ${h.fvg}dam</span>
+        </div>`;
+      }).join('')}
+      ${trendNote}
+    </div>`;
+}
+
 
 if(typeof L === 'undefined'){
   var el=document.getElementById('stxt');
