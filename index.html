@@ -2134,7 +2134,7 @@ function renderAifsTrend(){
     // FIX: dati interpolati a passo orario — 24 indici = 24 ore, non 4
     for(let i=0;i<times.length;i+=24){
       if(z5[i]==null) continue;
-      days.push({t:times[i],z5:Math.round(z5[i]/10),mslp:mslp[i]?Math.round(mslp[i]/100):null,t850:t850[i]?t850[i].toFixed(0):null});
+      days.push({t:times[i],z5:Math.round(z5[i]/10),mslp:mslp[i]?Math.round(mslp[i]):null,t850:t850[i]?t850[i].toFixed(0):null});
     }
     body.innerHTML=`<div style="font-size:8px;color:#334155;margin-bottom:8px">Z500 (dam) · Pressione (hPa) — confronto col giorno precedente</div>`+
       days.map((d,i)=>{
@@ -2485,7 +2485,7 @@ function renderAifsSynoptic(){
   if(AIFS_DET&&AIFS_DET.hourly){
     const idx=AIFS_DAY*24;
     const h=AIFS_DET.hourly;
-    const mslpNow = h.surface_pressure?.[idx]!=null?Math.round(h.surface_pressure[idx]/100):null; // Pa→hPa, coerente col resto del tool
+    const mslpNow = h.surface_pressure?.[idx]!=null?Math.round(h.surface_pressure[idx]):null; // già in hPa (AIFS via Open-Meteo)
     const w500d=degToCard(h.wind_direction_500hPa?.[idx]);
     const w700d=degToCard(h.wind_direction_700hPa?.[idx]);
     const w850d=degToCard(h.wind_direction_850hPa?.[idx]);
