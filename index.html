@@ -2056,7 +2056,7 @@ document.getElementById('sdot').style.cssText='width:7px;height:7px;border-radiu
 // AIFS — Tendenza circolazione medio termine (ECMWF AI model)
 // ═══════════════════════════════════════════════════
 var AIFS_LOADED=false, AIFS_MODE='det';
-var AIFS_DET=null, AIFS_ENS=null, AIFS_GRID_DATA=null;
+var AIFS_DET=null, AIFS_ENS=null, AIFS_GRID_DATA=null, AIFS_PRECIP=null;
 
 function setAifsMode(mode){
   AIFS_MODE=mode;
@@ -2068,7 +2068,7 @@ function setAifsMode(mode){
 async function loadAifs(){
   const body=document.getElementById('aifsTrendBody');
   try{
-    const detUrl=`https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&hourly=geopotential_height_500hPa,surface_pressure,temperature_850hPa&models=ecmwf_aifs025_single&forecast_days=10&timezone=Europe%2FRome`;
+    const detUrl=`https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&hourly=geopotential_height_500hPa,surface_pressure,temperature_850hPa,wind_speed_500hPa,wind_direction_500hPa,wind_speed_700hPa,wind_direction_700hPa,wind_speed_850hPa,wind_direction_850hPa,wind_speed_10m,wind_direction_10m&models=ecmwf_aifs025_single&forecast_days=10&timezone=Europe%2FRome`;
     AIFS_DET=await fj(detUrl).catch(e=>{console.warn('AIFS det:',e.message);return null;});
 
     const ensUrl=`https://ensemble-api.open-meteo.com/v1/ensemble?latitude=${LAT}&longitude=${LON}&hourly=geopotential_height_500hPa&models=ecmwf_aifs025&forecast_days=10&timezone=Europe%2FRome`;
@@ -2092,6 +2092,29 @@ async function loadAifs(){
     renderAifsSynoptic();
     if(typeof renderPinPanel==='function') renderPinPanel();
   }catch(e){console.warn('AIFS grid:',e.message);}
+
+  // Precipitazioni AIFS sui punti FVG chiave, 7 giorni — per il paragrafo piogge del bollettino
+  try{
+    const precipPts=[
+      {n:'Gemona',lat:46.27,lon:13.13},{n:'Cividale',lat:46.10,lon:13.43},
+      {n:'Udine',lat:46.06,lon:13.23},{n:'Palmanova',lat:45.90,lon:13.31},
+      {n:'Grado',lat:45.68,lon:13.40}
+    ];
+    AIFS_PRECIP=await Promise.all(precipPts.map(async pt=>{
+      try{
+        const url=`https://api.open-meteo.com/v1/forecast?latitude=${pt.lat}&longitude=${pt.lon}&daily=precipitation_sum&models=ecmwf_aifs025_single&forecast_days=7&timezone=Europe%2FRome`;
+        const d=await fj(url);
+        return{...pt,daily:d.daily?.precipitation_sum||[],times:d.daily?.time||[]};
+      }catch(e){return{...pt,daily:[],times:[]};}
+    }));
+  }catch(e){console.warn('AIFS precip:',e.message);}
+}
+
+// Converte gradi in punto cardinale (8 settori)
+function degToCard(deg){
+  if(deg==null) return '--';
+  const dirs=['N','NE','E','SE','S','SW','W','NW'];
+  return dirs[Math.round(deg/45)%8];
 }
 
 function renderAifsTrend(){
@@ -2421,6 +2444,55 @@ function renderAifsSynoptic(){
     s3=` Sul **FVG** (Z500 ${Math.round(fvg)} dam) la situazione resta da monitorare — il segnale sinottico non è ancora decisivo, verificare l'evoluzione dei parametri locali per il dettaglio a breve termine.`;
   }
 
+  // ── Frase 3b: pressione, venti in quota (500/700/850hPa) e ventilazione al suolo ──
+  let s3b='';
+  if(AIFS_DET&&AIFS_DET.hourly){
+    const idx=AIFS_DAY*24;
+    const h=AIFS_DET.hourly;
+    const mslpNow = h.surface_pressure?.[idx]!=null?Math.round(h.surface_pressure[idx]/1):null; // hPa già
+    const w500d=degToCard(h.wind_direction_500hPa?.[idx]);
+    const w700d=degToCard(h.wind_direction_700hPa?.[idx]);
+    const w850d=degToCard(h.wind_direction_850hPa?.[idx]);
+    const w10d=degToCard(h.wind_direction_10m?.[idx]);
+    const w10s=h.wind_speed_10m?.[idx]!=null?Math.round(h.wind_speed_10m[idx]):null;
+
+    if(mslpNow!=null||w500d!=='--'){
+      const mslpTxt = mslpNow!=null?`pressione al suolo stimata attorno a **${mslpNow} hPa**`:'';
+      const ventoQuotaTxt = (w500d!=='--'||w700d!=='--'||w850d!=='--')
+        ? ` In quota il flusso sul FVG proviene da **${w500d}** a 500hPa, da **${w700d}** a 700hPa e da **${w850d}** a 850hPa`
+        : '';
+      let ventoSuoloTxt='';
+      if(w10d!=='--'&&w10s!=null){
+        const intensita = w10s<10?'debole':w10s<25?'moderata':w10s<45?'sostenuta':'forte';
+        ventoSuoloTxt = ` — ventilazione al suolo prevista **${intensita}** da ${w10d} (~${w10s}km/h)`;
+        if(w10d==='NE'&&w10s>=25) ventoSuoloTxt+=', possibile accentuazione da Bora sul Carso/golfo di Trieste';
+      }
+      s3b=` ${mslpTxt}${mslpTxt&&ventoQuotaTxt?'.':''}${ventoQuotaTxt}${ventoSuoloTxt}.`;
+    }
+  }
+
+  // ── Frase 3c: precipitazioni attese per zona, con attendibilità crescente avvicinandosi ──
+  let s3c='';
+  if(AIFS_PRECIP&&AIFS_PRECIP.length){
+    const dayVals=AIFS_PRECIP.map(pt=>({n:pt.n,v:pt.daily[AIFS_DAY]??null})).filter(p=>p.v!=null);
+    if(dayVals.length){
+      const totMax=Math.max(...dayVals.map(p=>p.v));
+      if(totMax>=2){
+        // Ordina dal più piovoso al meno piovoso per raccontare le zone più colpite
+        const sorted=[...dayVals].sort((a,b)=>b.v-a.v);
+        const top=sorted.slice(0,2).filter(p=>p.v>=2);
+        const low=sorted.slice(-2).filter(p=>p.v<sorted[0].v*0.6);
+        if(top.length){
+          const topTxt=top.map(p=>`${p.n} (~${Math.round(p.v)}mm)`).join(' e ');
+          const lowTxt=low.length?` mentre su ${low.map(p=>p.n).join(' e ')} i quantitativi attesi sono più contenuti (~${Math.round(low[low.length-1].v)}mm)`:'';
+          s3c=` Le precipitazioni più probabili si concentrerebbero su **${topTxt}**,${lowTxt}.`;
+        }
+      } else {
+        s3c=` Precipitazioni non significative attese sulla regione in questa giornata.`;
+      }
+    }
+  }
+
   // ── Frase 4: attendibilità (ensemble spread se disponibile) ──
   let s4='';
   const daysOut=AIFS_DAY;
@@ -2437,12 +2509,20 @@ function renderAifsSynoptic(){
   if(!s4&&daysOut>=2){
     s4=` ⚠️ A ${daysOut} giorni di distanza il quadro resta indicativo — consigliato monitorare i prossimi aggiornamenti per conferma.`;
   }
+  // Nota attendibilità specifica per le precipitazioni, se presenti — linguaggio che
+  // cambia avvicinandosi all'evento (coerente col sistema di pin/tracciamento)
+  let s4precip='';
+  if(s3c&&s3c.includes('concentrerebbero')){
+    if(daysOut>=5) s4precip=` Sui quantitativi, attendibilità **bassa** a questa distanza — zone e valori potranno variare sensibilmente nei prossimi aggiornamenti.`;
+    else if(daysOut>=3) s4precip=` Sui quantitativi, attendibilità **moderata** — il quadro si sta delineando ma zone e valori sono ancora indicativi.`;
+    else if(daysOut>=1) s4precip=` Sui quantitativi, attendibilità **buona** — a questa distanza il quadro precipitativo è generalmente più stabile.`;
+  }
 
   const bold=t=>t.replace(/\*\*(.+?)\*\*/g,'<span style="color:#E2E8F0;font-weight:700">$1</span>');
 
   el.innerHTML=`
     <div style="font-size:11.5px;line-height:1.8;color:#94A3B8">
-      ${bold(s1)}${bold(s2)}${bold(s3)}
+      ${bold(s1)}${bold(s2)}${bold(s3)}${bold(s3b)}${bold(s3c)}${bold(s4precip)}
     </div>
     ${s4?`<div style="margin-top:10px;padding:7px 9px;background:#0A0A00;border-radius:6px;font-size:9.5px;color:#94A3B8;line-height:1.5">${s4}</div>`:''}
     <div style="margin-top:9px;font-size:8px;color:#1E3050">
