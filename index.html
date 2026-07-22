@@ -2136,19 +2136,27 @@ function renderAifsTrend(){
       if(z5[i]==null) continue;
       days.push({t:times[i],z5:Math.round(z5[i]/10),mslp:mslp[i]?Math.round(mslp[i]/100):null,t850:t850[i]?t850[i].toFixed(0):null});
     }
-    body.innerHTML=`<div style="font-size:8px;color:#334155;margin-bottom:8px">Z500 (dam) · Pressione (hPa) · T850 (°C) — ogni 24h</div>`+
-      days.map(d=>{
+    body.innerHTML=`<div style="font-size:8px;color:#334155;margin-bottom:8px">Z500 (dam) · Pressione (hPa) — confronto col giorno precedente</div>`+
+      days.map((d,i)=>{
         const dt=new Date(d.t);
         const gg=['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][dt.getDay()];
         const dd=String(dt.getDate()).padStart(2,'0');
         const col=d.z5>=584?'#EF4444':d.z5>=576?'#F97316':d.z5>=568?'#EAB308':'#38BDF8';
-        return`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #0A1018">
+        // Freccia di tendenza: confronta con il giorno precedente nella tabella
+        let arrow='→', arrowCol='#475569';
+        if(i>0&&days[i-1].z5!=null){
+          const delta=d.z5-days[i-1].z5;
+          if(delta>2){arrow='↗';arrowCol='#F97316';}
+          else if(delta<-2){arrow='↘';arrowCol='#38BDF8';}
+        }
+        return`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #0A1018">
           <div style="width:44px;font-size:9px;color:#64748B;flex-shrink:0">${gg} ${dd}</div>
+          <div style="width:16px;font-size:13px;font-weight:700;color:${arrowCol};flex-shrink:0;text-align:center">${arrow}</div>
           <div style="flex:1;display:flex;align-items:center;gap:6px">
             <div style="width:8px;height:8px;border-radius:50%;background:${col};flex-shrink:0"></div>
             <div style="font-size:10px;color:#94A3B8">Z500 ${d.z5}dam</div>
           </div>
-          <div style="font-size:9px;color:#475569">${d.mslp??'--'}hPa · ${d.t850??'--'}°</div>
+          <div style="font-size:10.5px;color:#CBD5E1;font-weight:600">${d.mslp??'--'} hPa</div>
         </div>`;
       }).join('');
     return;
@@ -2337,11 +2345,18 @@ function renderAifsSynoptic(){
   }
   const sysClass=classifySystem();
 
-  // ── Frase 1: quadro contestualizzato al giorno specifico (non genericamente "attuale") ──
-  // Per oggi usa il presente semplice, per i giorni futuri specifica sempre "nella giornata di..."
+  // ── Frase 1: quadro contestualizzato al giorno specifico E alla fase di evoluzione ──
   const dayCtx = AIFS_DAY===0 ? '' : `Nella giornata di **${dayNow}**, `;
-  const verboEssere = AIFS_DAY===0 ? 'è' : 'sarà';
-  const verboVede = AIFS_DAY===0 ? 'mostra' : 'vedrà';
+
+  // Calcola la fase del sistema confrontando col giorno precedente (se pattern persiste)
+  // "maxNow" servirà a capire se il nucleo si sta rafforzando/indebolendo/è stabile
+  function faseEvolutiva(maxValNow,maxValPrev,soglia=2){
+    if(maxValPrev==null||maxValNow==null) return null;
+    const d=maxValNow-maxValPrev;
+    if(Math.abs(d)<=soglia) return{fase:'maturo',testo:'fase di maturità della struttura, situazione sostanzialmente stabile',delta:d};
+    if(d>soglia) return{fase:'consolidamento',testo:`prosegue il consolidamento (+${Math.round(d)} dam rispetto a ${aifsDayLabel(AIFS_DAY-1)})`,delta:d};
+    return{fase:'cedimento',testo:`si osservano i primi segnali di cedimento (${Math.round(d)} dam rispetto a ${aifsDayLabel(AIFS_DAY-1)}) — preludio a un possibile cambiamento di pattern`,delta:d};
+  }
 
   let s1='';
   if(isCutoff){
@@ -2352,9 +2367,30 @@ function renderAifsSynoptic(){
   } else if(dNordSud!=null&&dNordSud>10&&no>576){
     s1=`${dayCtx}${AIFS_DAY===0?'un blocco anticiclonico insiste':'un blocco anticiclonico insisterà'} sul settore scandinavo-artico, con il massimo di geopotenziale su **${maxPt?maxPt.n:'Scandinavia'}** (${maxPt?Math.round(maxPt.v):Math.round(no)} dam), deviando il flusso atlantico verso latitudini più meridionali. Il minimo relativo ${AIFS_DAY===0?'si colloca':'si collocherà'} su **${minPt?minPt.n:'--'}** (${minPt?Math.round(minPt.v):'--'} dam).`;
   } else if(dSudFvg!=null&&dSudFvg>4&&su>580){
-    s1=`${dayCtx}${AIFS_DAY===0?'il quadro europeo vede':'il quadro europeo vedrà'} una **rimonta anticiclonica** dal Nord Africa/Mediterraneo, con i massimi di geopotenziale e pressione concentrati su **${maxPt?maxPt.n:'Nord Africa'}** (${maxPt?Math.round(maxPt.v):Math.round(su)} dam) in estensione verso il comparto alpino-centro-occidentale.`;
+    // Confronta col giorno precedente per capire la fase (avvio/consolidamento/maturità/cedimento)
+    const prevMax = (AIFS_DAY>0&&prev)? (prev.sud) : null; // stessa metrica del ramo sud
+    const fase = AIFS_DAY>0 ? faseEvolutiva(su,prevMax) : null;
+    if(AIFS_DAY===0||!fase){
+      s1=`${dayCtx}${AIFS_DAY===0?'il quadro europeo vede':'il quadro europeo vedrà'} una **rimonta anticiclonica** dal Nord Africa/Mediterraneo, con i massimi di geopotenziale e pressione concentrati su **${maxPt?maxPt.n:'Nord Africa'}** (${maxPt?Math.round(maxPt.v):Math.round(su)} dam) in estensione verso il comparto alpino-centro-occidentale.`;
+    } else if(fase.fase==='consolidamento'){
+      s1=`${dayCtx}la **rimonta anticiclonica** avviata nei giorni precedenti **prosegue il consolidamento**: il nucleo massimo, su **${maxPt?maxPt.n:'Nord Africa'}**, sale a ${Math.round(su)} dam (${fase.testo}) mentre si estende ulteriormente verso il comparto alpino.`;
+    } else if(fase.fase==='maturo'){
+      s1=`${dayCtx}l'**anticiclone** risulta ormai **pienamente stabilizzato** sul comparto alpino-centro-occidentale (${Math.round(su)} dam, valore pressoché invariato rispetto a ${aifsDayLabel(AIFS_DAY-1)}) — ${fase.testo}.`;
+    } else {
+      s1=`${dayCtx}${fase.testo.charAt(0).toUpperCase()+fase.testo.slice(1)} dell'anticiclone (${Math.round(su)} dam) attualmente esteso sul comparto alpino-centro-occidentale.`;
+    }
   } else if(dOvestCentro!=null&&dOvestCentro>6){
-    s1=`${dayCtx}${AIFS_DAY===0?'un promontorio anticiclonico atlantico si estende':'un promontorio anticiclonico atlantico si estenderà'} (massimo su **${maxPt?maxPt.n:'settore atlantico'}**, ${maxPt?Math.round(maxPt.v):Math.round(ow)} dam) verso l'Europa centrale, garantendo stabilità diffusa.`;
+    const prevOw = (AIFS_DAY>0&&prev)? prev.ovest : null;
+    const fase = AIFS_DAY>0 ? faseEvolutiva(ow,prevOw) : null;
+    if(AIFS_DAY===0||!fase){
+      s1=`${dayCtx}${AIFS_DAY===0?'un promontorio anticiclonico atlantico si estende':'un promontorio anticiclonico atlantico si estenderà'} (massimo su **${maxPt?maxPt.n:'settore atlantico'}**, ${maxPt?Math.round(maxPt.v):Math.round(ow)} dam) verso l'Europa centrale, garantendo stabilità diffusa.`;
+    } else if(fase.fase==='consolidamento'){
+      s1=`${dayCtx}il **promontorio anticiclonico atlantico** prosegue il consolidamento sull'Europa centrale (massimo ${Math.round(ow)} dam, ${fase.testo}), garantendo stabilità diffusa in rinforzo.`;
+    } else if(fase.fase==='maturo'){
+      s1=`${dayCtx}il **promontorio anticiclonico** risulta ormai stabilizzato sull'Europa centrale (${Math.round(ow)} dam, valore pressoché invariato rispetto a ${aifsDayLabel(AIFS_DAY-1)}) — ${fase.testo}.`;
+    } else {
+      s1=`${dayCtx}${fase.testo.charAt(0).toUpperCase()+fase.testo.slice(1)} del promontorio anticiclonico (${Math.round(ow)} dam) attualmente presente sull'Europa centrale.`;
+    }
   } else {
     s1=`${dayCtx}${AIFS_DAY===0?'la circolazione europea appare':'la circolazione europea sarà'} **debole e poco organizzata**, senza una struttura sinottica dominante (gradienti Ovest-Centro di soli ${dOvestCentro!=null?Math.round(Math.abs(dOvestCentro)):'--'} dam). Massimo relativo su **${maxPt?maxPt.n:'--'}** (${maxPt?Math.round(maxPt.v):'--'} dam), minimo su **${minPt?minPt.n:'--'}** (${minPt?Math.round(minPt.v):'--'} dam).`;
   }
@@ -2449,7 +2485,7 @@ function renderAifsSynoptic(){
   if(AIFS_DET&&AIFS_DET.hourly){
     const idx=AIFS_DAY*24;
     const h=AIFS_DET.hourly;
-    const mslpNow = h.surface_pressure?.[idx]!=null?Math.round(h.surface_pressure[idx]/1):null; // hPa già
+    const mslpNow = h.surface_pressure?.[idx]!=null?Math.round(h.surface_pressure[idx]/100):null; // Pa→hPa, coerente col resto del tool
     const w500d=degToCard(h.wind_direction_500hPa?.[idx]);
     const w700d=degToCard(h.wind_direction_700hPa?.[idx]);
     const w850d=degToCard(h.wind_direction_850hPa?.[idx]);
