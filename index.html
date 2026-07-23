@@ -2263,19 +2263,22 @@ function aifsTilt(cur){
 // Trova il giorno (0-2) in cui avviene il cambio di pattern più marcato sul FVG
 function aifsFindTransitionDay(){
   if(!AIFS_GRID_DATA) return null;
-  // Cerca la transizione a partire dal giorno attualmente selezionato, non sempre da oggi —
-  // altrimenti il giorno di partenza e quello di transizione possono coincidere
-  // (es. "tra sabato e sabato" se +4 è già il giorno di massimo cambiamento)
+  // Cerca la PRIMA transizione significativa a partire dal giorno selezionato —
+  // non la più ampia di tutta la settimana. Un piccolo fronte domani è più
+  // rilevante di un rinforzo anticiclonico più marcato ma a 5 giorni di distanza.
+  // (bug scoperto il 23/07: bollettino ignorava un calo di 7dam il giorno dopo
+  // per inseguire un salto di 10dam a 5 giorni)
   const startDay=AIFS_DAY;
-  const vals={};
-  for(let d=startDay;d<=6;d++) vals[d]=aifsZoneAvg(d);
-  let maxDelta=0, dayIdx=null;
+  const soglia=3;
   for(let i=startDay;i<6;i++){
-    if(vals[i]?.fvg==null||vals[i+1]?.fvg==null) continue;
-    const delta=Math.abs(vals[i+1].fvg-vals[i].fvg);
-    if(delta>maxDelta){maxDelta=delta;dayIdx=i+1;}
+    const vi=aifsZoneAvg(i), vi1=aifsZoneAvg(i+1);
+    if(vi?.fvg==null||vi1?.fvg==null) continue;
+    const delta=Math.abs(vi1.fvg-vi.fvg);
+    if(delta>=soglia&&(i+1)!==startDay){
+      return{day:i+1,delta:delta};
+    }
   }
-  return maxDelta>=3&&dayIdx!==startDay?{day:dayIdx,delta:maxDelta}:null;
+  return null;
 }
 
 function aifsDayLabel(d){
