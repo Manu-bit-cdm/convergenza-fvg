@@ -2298,6 +2298,53 @@ function cloudDesc(pct){
   return 'cielo molto nuvoloso/coperto';
 }
 
+// Coordinate di un punto griglia per nome (per calcolare distanze geografiche)
+function eugridCoord(name){
+  const p=EU_GRID.find(g=>g.n===name);
+  return p?{lat:p.lat,lon:p.lon}:null;
+}
+// Distanza approssimata in gradi tra due punti (sufficiente per un filtro di plausibilità)
+function coordDist(a,b){
+  if(!a||!b) return null;
+  return Math.sqrt((a.lat-b.lat)**2+(a.lon-b.lon)**2);
+}
+
+// ── Tracciamento sistema secondario Iberia/Mediterraneo occidentale ──
+// La ricerca del minimo assoluto su tutta la griglia trova sempre il sistema
+// più profondo (es. depressione atlantica principale), ignorando sistemi più
+// piccoli ma potenzialmente più rilevanti per noi (es. una minor low al largo
+// del Portogallo diretta verso il Nord Italia). Questo tracciamento dedicato
+// cerca specificamente un minimo locale in area iberica e verifica se nei
+// giorni successivi sembra avvicinarsi al comparto italiano.
+// (aggiunto 23/07/2026 dopo verifica con mappe AIFS reali — Wetterzentrale)
+function aifsSecondarySystem(dayIdx){
+  if(!AIFS_GRID_DATA) return null;
+  const idxTime=dayIdx*24;
+  const iberiaPts=AIFS_GRID_DATA.filter(p=>p.n==='Iberia N'||p.n==='Iberia S');
+  const ibVals=iberiaPts.map(p=>p.z500[idxTime]).filter(v=>v!=null).map(v=>v/10);
+  if(!ibVals.length) return null;
+  const ibAvg=ibVals.reduce((a,b)=>a+b,0)/ibVals.length;
+
+  const franciaPt=AIFS_GRID_DATA.find(p=>p.n==='Francia O');
+  const italiaPt=AIFS_GRID_DATA.find(p=>p.n==='Italia S');
+  const franciaV=franciaPt?.z500[idxTime]!=null?franciaPt.z500[idxTime]/10:null;
+  const italiaV=italiaPt?.z500[idxTime]!=null?italiaPt.z500[idxTime]/10:null;
+  if(franciaV==null||italiaV==null) return null;
+
+  // Iberia è un minimo locale solo se sensibilmente più bassa dei vicini
+  const isLocalLow = ibAvg<franciaV-3 && ibAvg<italiaV-3;
+  if(!isLocalLow) return null;
+
+  // Verifica se nei prossimi giorni il segnale sembra avvicinarsi all'Italia
+  // (Z500 su Italia S in calo rispetto al valore attuale)
+  let approaching=false, approachDay=null;
+  for(let d=dayIdx+1; d<=Math.min(dayIdx+3,6); d++){
+    const v=italiaPt.z500[d*24];
+    if(v!=null && (v/10)<italiaV-3){approaching=true;approachDay=d;break;}
+  }
+  return{ibAvg:Math.round(ibAvg),italiaV:Math.round(italiaV),approaching,approachDay};
+}
+
 function renderAifsSynoptic(){
   const el=document.getElementById('aifsSynopticBody');
   if(!el) return;
@@ -2426,6 +2473,18 @@ function renderAifsSynoptic(){
   // uso i valori di T850 dalla griglia solo se disponibili — altrimenti ometto senza rompere il testo
   // (i punti griglia hanno solo Z500, quindi qui ci affidiamo al T850 puntuale FVG per coerenza)
 
+  // ── Sistema secondario Iberia/Mediterraneo occidentale — verso l'Italia? ──
+  let s1sec='';
+  const secSys=aifsSecondarySystem(AIFS_DAY);
+  if(secSys){
+    if(secSys.approaching){
+      const lblApproach=aifsDayLabel(secSys.approachDay);
+      s1sec=` Da monitorare inoltre un **sistema secondario** più debole in area iberica/Mediterraneo occidentale (${secSys.ibAvg} dam), in apparente avvicinamento verso il Mediterraneo centrale — possibili ripercussioni dirette sul Friuli Venezia Giulia da verificare, con segnale più chiaro atteso entro **${lblApproach}**.`;
+    } else {
+      s1sec=` Si segnala anche un minimo secondario più debole in area iberica (${secSys.ibAvg} dam), al momento senza segnali di avvicinamento al comparto italiano nei prossimi giorni.`;
+    }
+  }
+
   // ── Evoluzione: già in corso o futura ──
   let s2='';
   const deltaFromPrev = prev&&prev.fvg!=null&&cur.fvg!=null ? cur.fvg-prev.fvg : null;
@@ -2450,7 +2509,12 @@ function renderAifsSynoptic(){
     const idxTrans=transition.day*24;
     const gridValsTrans=AIFS_GRID_DATA.map(p=>({n:p.n,v:p.z500[idxTrans]!=null?p.z500[idxTrans]/10:null})).filter(p=>p.v!=null);
     const minPtTrans=gridValsTrans.length?gridValsTrans.reduce((a,b)=>b.v<a.v?b:a):null;
-    const traiettoriaTxt = (minPt&&minPtTrans&&minPt.n!==minPtTrans.n)
+    // Filtro di plausibilità: dichiara "il minimo si sposta da X a Y" solo se i due
+    // punti sono geograficamente vicini — altrimenti è più probabile che siano due
+    // sistemi diversi (o lo stesso sistema con un minimo "saltellante" tra punti
+    // griglia non adiacenti) e la frase risulterebbe fisicamente fuorviante.
+    const distOk = minPt&&minPtTrans ? (coordDist(eugridCoord(minPt.n),eugridCoord(minPtTrans.n))??99)<14 : false;
+    const traiettoriaTxt = (minPt&&minPtTrans&&minPt.n!==minPtTrans.n&&distOk)
       ? ` Il minimo depressionario è atteso spostarsi da **${minPt.n}** verso **${minPtTrans.n}**,`
       : '';
     const valAfter=aifsZoneAvg(transition.day);
@@ -2561,7 +2625,7 @@ function renderAifsSynoptic(){
 
   el.innerHTML=`
     <div style="font-size:11.5px;line-height:1.8;color:#94A3B8">
-      ${bold(s1)}${bold(s1jet)}${bold(s2)}
+      ${bold(s1)}${bold(s1jet)}${bold(s1sec)}${bold(s2)}
     </div>
     ${s4?`<div style="margin-top:8px;padding:7px 9px;background:#0A0A00;border-radius:6px;font-size:9.5px;color:#94A3B8;line-height:1.5">${s4}</div>`:''}
 
