@@ -2068,7 +2068,7 @@ function setAifsMode(mode){
 async function loadAifs(){
   const body=document.getElementById('aifsTrendBody');
   try{
-    const detUrl=`https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&hourly=geopotential_height_500hPa,surface_pressure,temperature_850hPa,wind_speed_500hPa,wind_direction_500hPa,wind_speed_700hPa,wind_direction_700hPa,wind_speed_850hPa,wind_direction_850hPa,wind_speed_10m,wind_direction_10m&models=ecmwf_aifs025_single&forecast_days=10&timezone=Europe%2FRome`;
+    const detUrl=`https://api.open-meteo.com/v1/forecast?latitude=${LAT}&longitude=${LON}&hourly=geopotential_height_500hPa,surface_pressure,temperature_850hPa,temperature_2m,cloud_cover,wind_speed_500hPa,wind_direction_500hPa,wind_speed_700hPa,wind_direction_700hPa,wind_speed_850hPa,wind_direction_850hPa,wind_speed_300hPa,wind_direction_300hPa,wind_speed_10m,wind_direction_10m&models=ecmwf_aifs025_single&forecast_days=10&timezone=Europe%2FRome`;
     AIFS_DET=await fj(detUrl).catch(e=>{console.warn('AIFS det:',e.message);return null;});
 
     const ensUrl=`https://ensemble-api.open-meteo.com/v1/ensemble?latitude=${LAT}&longitude=${LON}&hourly=geopotential_height_500hPa&models=ecmwf_aifs025&forecast_days=10&timezone=Europe%2FRome`;
@@ -2136,7 +2136,7 @@ function renderAifsTrend(){
       if(z5[i]==null) continue;
       days.push({t:times[i],z5:Math.round(z5[i]/10),mslp:mslp[i]?Math.round(mslp[i]):null,t850:t850[i]?t850[i].toFixed(0):null});
     }
-    body.innerHTML=`<div style="font-size:8px;color:#334155;margin-bottom:8px">Z500 (dam) · Pressione (hPa) — confronto col giorno precedente</div>`+
+    body.innerHTML=`<div style="font-size:8px;color:#334155;margin-bottom:8px">Z500 (dam) · Pressione (hPa) · T850 (°C) — confronto col giorno precedente</div>`+
       days.map((d,i)=>{
         const dt=new Date(d.t);
         const gg=['Dom','Lun','Mar','Mer','Gio','Ven','Sab'][dt.getDay()];
@@ -2149,14 +2149,15 @@ function renderAifsTrend(){
           if(delta>2){arrow='↗';arrowCol='#F97316';}
           else if(delta<-2){arrow='↘';arrowCol='#38BDF8';}
         }
-        return`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #0A1018">
-          <div style="width:44px;font-size:9px;color:#64748B;flex-shrink:0">${gg} ${dd}</div>
-          <div style="width:16px;font-size:13px;font-weight:700;color:${arrowCol};flex-shrink:0;text-align:center">${arrow}</div>
-          <div style="flex:1;display:flex;align-items:center;gap:6px">
-            <div style="width:8px;height:8px;border-radius:50%;background:${col};flex-shrink:0"></div>
-            <div style="font-size:10px;color:#94A3B8">Z500 ${d.z5}dam</div>
+        return`<div style="display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid #0A1018">
+          <div style="width:40px;font-size:9px;color:#64748B;flex-shrink:0">${gg} ${dd}</div>
+          <div style="width:14px;font-size:13px;font-weight:700;color:${arrowCol};flex-shrink:0;text-align:center">${arrow}</div>
+          <div style="flex:1;display:flex;align-items:center;gap:5px">
+            <div style="width:7px;height:7px;border-radius:50%;background:${col};flex-shrink:0"></div>
+            <div style="font-size:9.5px;color:#94A3B8">Z500 ${d.z5}dam</div>
           </div>
-          <div style="font-size:10.5px;color:#CBD5E1;font-weight:600">${d.mslp??'--'} hPa</div>
+          <div style="font-size:9.5px;color:#CBD5E1;font-weight:600;min-width:52px;text-align:right">${d.mslp??'--'} hPa</div>
+          <div style="font-size:9.5px;color:#F59E0B;font-weight:600;min-width:38px;text-align:right">${d.t850??'--'}°C</div>
         </div>`;
       }).join('');
     return;
@@ -2286,6 +2287,14 @@ function aifsDayLabel(d){
   return gg;
 }
 
+function cloudDesc(pct){
+  if(pct==null) return null;
+  if(pct<20) return 'cielo sereno';
+  if(pct<50) return 'poco nuvoloso';
+  if(pct<80) return 'nuvoloso';
+  return 'cielo molto nuvoloso/coperto';
+}
+
 function renderAifsSynoptic(){
   const el=document.getElementById('aifsSynopticBody');
   if(!el) return;
@@ -2345,11 +2354,8 @@ function renderAifsSynoptic(){
   }
   const sysClass=classifySystem();
 
-  // ── Frase 1: quadro contestualizzato al giorno specifico E alla fase di evoluzione ──
   const dayCtx = AIFS_DAY===0 ? '' : `Nella giornata di **${dayNow}**, `;
 
-  // Calcola la fase del sistema confrontando col giorno precedente (se pattern persiste)
-  // "maxNow" servirà a capire se il nucleo si sta rafforzando/indebolendo/è stabile
   function faseEvolutiva(maxValNow,maxValPrev,soglia=2){
     if(maxValPrev==null||maxValNow==null) return null;
     const d=maxValNow-maxValPrev;
@@ -2358,62 +2364,82 @@ function renderAifsSynoptic(){
     return{fase:'cedimento',testo:`si osservano i primi segnali di cedimento (${Math.round(d)} dam rispetto a ${aifsDayLabel(AIFS_DAY-1)}) — preludio a un possibile cambiamento di pattern`,delta:d};
   }
 
+  // ═══════════════════════════════════════════════════
+  // BLOCCO 1 — QUADRO EUROMEDITERRANEO (linguaggio tecnico-sinottico)
+  // Non ripete ovvietà (es. "massimi su Nord Africa" quando già implicito
+  // dal tipo di pattern) — punta su minimi depressionari, getto, T850, evoluzione
+  // ═══════════════════════════════════════════════════
   let s1='';
   if(isCutoff){
-    s1=`${dayCtx}${AIFS_DAY===0?'il comparto europeo mostra':'il comparto europeo vedrà'} una **goccia fredda isolata** in quota su **${minPt?minPt.n:'Italia meridionale'}** (Z500 ${minPt?Math.round(minPt.v):Math.round(cur.italiaSud)} dam), separata dal flusso principale che ${AIFS_DAY===0?'resta':'resterà'} relativamente riequilibrato più a nord (${Math.round(cur.centro)} dam sul comparto centro-europeo). ${sysClass?sysClass.note.charAt(0).toUpperCase()+sysClass.note.slice(1)+'.':''}`;
+    s1=`${dayCtx}${AIFS_DAY===0?'si osserva':'sarà presente'} una **goccia fredda isolata** in quota su **${minPt?minPt.n:'Italia meridionale'}** (minimo depressionario a ${minPt?Math.round(minPt.v):Math.round(cur.italiaSud)} dam), separata dal flusso principale che ${AIFS_DAY===0?'resta':'resterà'} riequilibrato più a nord (${Math.round(cur.centro)} dam). ${sysClass?sysClass.note.charAt(0).toUpperCase()+sysClass.note.slice(1)+'.':''}`;
   } else if(dOvestCentro!=null&&dOvestCentro<-6){
-    const tipoTxt=sysClass?` — configurazione classificabile come **${sysClass.tipo}**`:'';
-    s1=`${dayCtx}${AIFS_DAY===0?'il comparto europeo è dominato da':'il comparto europeo sarà dominato da'} un **flusso atlantico in intensificazione**, con il minimo di geopotenziale localizzato su **${minPt?minPt.n:'settore occidentale'}** (${minPt?Math.round(minPt.v):Math.round(ow)} dam)${tipoTxt}, mentre il massimo relativo ${AIFS_DAY===0?'si trova':'si troverà'} su **${maxPt?maxPt.n:'Nord Africa'}** (${maxPt?Math.round(maxPt.v):'--'} dam). ${sysClass?sysClass.note.charAt(0).toUpperCase()+sysClass.note.slice(1)+'.':''}`;
+    const tipoTxt=sysClass?` — **${sysClass.tipo}**`:'';
+    s1=`${dayCtx}${AIFS_DAY===0?'il flusso atlantico si intensifica':'il flusso atlantico sarà in intensificazione'}, con il minimo depressionario su **${minPt?minPt.n:'settore occidentale'}** (${minPt?Math.round(minPt.v):Math.round(ow)} dam)${tipoTxt}. ${sysClass?sysClass.note.charAt(0).toUpperCase()+sysClass.note.slice(1)+'.':''}`;
   } else if(dNordSud!=null&&dNordSud>10&&no>576){
-    s1=`${dayCtx}${AIFS_DAY===0?'un blocco anticiclonico insiste':'un blocco anticiclonico insisterà'} sul settore scandinavo-artico, con il massimo di geopotenziale su **${maxPt?maxPt.n:'Scandinavia'}** (${maxPt?Math.round(maxPt.v):Math.round(no)} dam), deviando il flusso atlantico verso latitudini più meridionali. Il minimo relativo ${AIFS_DAY===0?'si colloca':'si collocherà'} su **${minPt?minPt.n:'--'}** (${minPt?Math.round(minPt.v):'--'} dam).`;
+    s1=`${dayCtx}${AIFS_DAY===0?'un blocco anticiclonico insiste':'un blocco anticiclonico insisterà'} sul settore scandinavo-artico (${maxPt?Math.round(maxPt.v):Math.round(no)} dam), deviando il flusso atlantico verso latitudini più meridionali — minimo relativo su **${minPt?minPt.n:'--'}** (${minPt?Math.round(minPt.v):'--'} dam).`;
   } else if(dSudFvg!=null&&dSudFvg>4&&su>580){
-    // Confronta col giorno precedente per capire la fase (avvio/consolidamento/maturità/cedimento)
-    const prevMax = (AIFS_DAY>0&&prev)? (prev.sud) : null; // stessa metrica del ramo sud
+    const prevMax = (AIFS_DAY>0&&prev)? prev.sud : null;
     const fase = AIFS_DAY>0 ? faseEvolutiva(su,prevMax) : null;
     if(AIFS_DAY===0||!fase){
-      s1=`${dayCtx}${AIFS_DAY===0?'il quadro europeo vede':'il quadro europeo vedrà'} una **rimonta anticiclonica** dal Nord Africa/Mediterraneo, con i massimi di geopotenziale e pressione concentrati su **${maxPt?maxPt.n:'Nord Africa'}** (${maxPt?Math.round(maxPt.v):Math.round(su)} dam) in estensione verso il comparto alpino-centro-occidentale.`;
+      s1=`${dayCtx}l'**alta pressione** si ${AIFS_DAY===0?'rinforza':'rinforzerà'} sul comparto mediterraneo ed europeo centro-occidentale (${Math.round(su)} dam).`;
     } else if(fase.fase==='consolidamento'){
-      s1=`${dayCtx}la **rimonta anticiclonica** avviata nei giorni precedenti **prosegue il consolidamento**: il nucleo massimo, su **${maxPt?maxPt.n:'Nord Africa'}**, sale a ${Math.round(su)} dam (${fase.testo}) mentre si estende ulteriormente verso il comparto alpino.`;
+      s1=`${dayCtx}l'**alta pressione** ${fase.testo}, salendo a ${Math.round(su)} dam ed estendendosi verso l'arco alpino.`;
     } else if(fase.fase==='maturo'){
-      s1=`${dayCtx}l'**anticiclone** risulta ormai **pienamente stabilizzato** sul comparto alpino-centro-occidentale (${Math.round(su)} dam, valore pressoché invariato rispetto a ${aifsDayLabel(AIFS_DAY-1)}) — ${fase.testo}.`;
+      s1=`${dayCtx}l'**anticiclone** risulta ormai **pienamente stabilizzato** (${Math.round(su)} dam, valore pressoché invariato rispetto a ${aifsDayLabel(AIFS_DAY-1)}) — ${fase.testo}.`;
     } else {
-      s1=`${dayCtx}${fase.testo.charAt(0).toUpperCase()+fase.testo.slice(1)} dell'anticiclone (${Math.round(su)} dam) attualmente esteso sul comparto alpino-centro-occidentale.`;
+      s1=`${dayCtx}${fase.testo.charAt(0).toUpperCase()+fase.testo.slice(1)} dell'anticiclone (${Math.round(su)} dam).`;
     }
   } else if(dOvestCentro!=null&&dOvestCentro>6){
     const prevOw = (AIFS_DAY>0&&prev)? prev.ovest : null;
     const fase = AIFS_DAY>0 ? faseEvolutiva(ow,prevOw) : null;
     if(AIFS_DAY===0||!fase){
-      s1=`${dayCtx}${AIFS_DAY===0?'un promontorio anticiclonico atlantico si estende':'un promontorio anticiclonico atlantico si estenderà'} (massimo su **${maxPt?maxPt.n:'settore atlantico'}**, ${maxPt?Math.round(maxPt.v):Math.round(ow)} dam) verso l'Europa centrale, garantendo stabilità diffusa.`;
+      s1=`${dayCtx}${AIFS_DAY===0?'un promontorio anticiclonico si estende':'un promontorio anticiclonico si estenderà'} verso l'Europa centrale (${maxPt?Math.round(maxPt.v):Math.round(ow)} dam), garantendo stabilità diffusa.`;
     } else if(fase.fase==='consolidamento'){
-      s1=`${dayCtx}il **promontorio anticiclonico atlantico** prosegue il consolidamento sull'Europa centrale (massimo ${Math.round(ow)} dam, ${fase.testo}), garantendo stabilità diffusa in rinforzo.`;
+      s1=`${dayCtx}il **promontorio anticiclonico** prosegue il consolidamento (${Math.round(ow)} dam, ${fase.testo}).`;
     } else if(fase.fase==='maturo'){
-      s1=`${dayCtx}il **promontorio anticiclonico** risulta ormai stabilizzato sull'Europa centrale (${Math.round(ow)} dam, valore pressoché invariato rispetto a ${aifsDayLabel(AIFS_DAY-1)}) — ${fase.testo}.`;
+      s1=`${dayCtx}il **promontorio anticiclonico** risulta stabilizzato (${Math.round(ow)} dam, invariato rispetto a ${aifsDayLabel(AIFS_DAY-1)}).`;
     } else {
-      s1=`${dayCtx}${fase.testo.charAt(0).toUpperCase()+fase.testo.slice(1)} del promontorio anticiclonico (${Math.round(ow)} dam) attualmente presente sull'Europa centrale.`;
+      s1=`${dayCtx}${fase.testo.charAt(0).toUpperCase()+fase.testo.slice(1)} del promontorio (${Math.round(ow)} dam).`;
     }
   } else {
-    s1=`${dayCtx}${AIFS_DAY===0?'la circolazione europea appare':'la circolazione europea sarà'} **debole e poco organizzata**, senza una struttura sinottica dominante (gradienti Ovest-Centro di soli ${dOvestCentro!=null?Math.round(Math.abs(dOvestCentro)):'--'} dam). Massimo relativo su **${maxPt?maxPt.n:'--'}** (${maxPt?Math.round(maxPt.v):'--'} dam), minimo su **${minPt?minPt.n:'--'}** (${minPt?Math.round(minPt.v):'--'} dam).`;
+    s1=`${dayCtx}la circolazione europea ${AIFS_DAY===0?'appare':'sarà'} **debole e poco organizzata**, senza struttura sinottica dominante.`;
   }
 
-  // ── Frase 2: PRIMA verifica se la transizione è già in corso arrivando a questo giorno ──
-  // (confronto col giorno precedente nella sequenza), SOLO se non lo è cerca una transizione futura
+  // ── Corrente a getto (300hPa) e T850 estremi — arricchisce il quadro con un dato aggiuntivo ──
+  let s1jet='';
+  if(AIFS_DET&&AIFS_DET.hourly){
+    const idx=AIFS_DAY*24;
+    const ws300=AIFS_DET.hourly.wind_speed_300hPa?.[idx];
+    const wd300=AIFS_DET.hourly.wind_direction_300hPa?.[idx];
+    if(ws300!=null){
+      const intensitaGetto = ws300>140?'molto intensa':ws300>90?'sostenuta':'moderata';
+      const formaGetto = (sysClass&&sysClass.tipo.includes('dinamica'))?'ondulata, con marcata escursione a onda corta':'relativamente lineare';
+      s1jet=` La corrente a getto risulta **${formaGetto}** (${Math.round(ws300)}km/h da ${degToCard(wd300)} a 300hPa, intensità ${intensitaGetto}).`;
+    }
+  }
+  // T850 estremi tra le zone (range termico in quota sul comparto)
+  let s1temp='';
+  const t850vals=[cur.atlantico,cur.artico,cur.italiaSud,cur.sudOvest].filter(v=>v!=null);
+  // uso i valori di T850 dalla griglia solo se disponibili — altrimenti ometto senza rompere il testo
+  // (i punti griglia hanno solo Z500, quindi qui ci affidiamo al T850 puntuale FVG per coerenza)
+
+  // ── Evoluzione: già in corso o futura ──
   let s2='';
   const deltaFromPrev = prev&&prev.fvg!=null&&cur.fvg!=null ? cur.fvg-prev.fvg : null;
   const alreadyTransitioning = deltaFromPrev!=null && Math.abs(deltaFromPrev)>=3;
 
   if(alreadyTransitioning){
-    // Il cambiamento è già avvenuto/in corso arrivando a questo giorno specifico
     const dirPrev = deltaFromPrev<0?'in calo':'in aumento';
     const prevLbl=aifsDayLabel(AIFS_DAY-1);
     if(dirPrev==='in calo'){
       const wasAnticiclonico = prev.fvg>578;
       if(wasAnticiclonico&&cur.fvg<570){
-        s2=` Rispetto a **${prevLbl}**, in questa giornata il cedimento della struttura anticiclonica risulta già evidente (Z500 da ${Math.round(prev.fvg)} a ${Math.round(cur.fvg)} dam) — è il momento in cui **il peggioramento si concretizza**: il flusso instabile${sysClass?` (${sysClass.tipo})`:''} è atteso interessare direttamente il FVG proprio in questa fase, con aumento dell'umidità in quota e condizioni favorevoli a fenomeni organizzati.`;
+        s2=` Rispetto a **${prevLbl}**, il cedimento della struttura anticiclonica risulta già evidente (Z500 da ${Math.round(prev.fvg)} a ${Math.round(cur.fvg)} dam) — il flusso instabile${sysClass?` (${sysClass.tipo})`:''} interesserà direttamente il Mediterraneo centrale, Friuli compreso.`;
       } else {
-        s2=` Rispetto a **${prevLbl}**, il geopotenziale è già sceso sensibilmente (da ${Math.round(prev.fvg)} a ${Math.round(cur.fvg)} dam) — **la fase più instabile si colloca proprio in questa giornata**, con condizioni favorevoli a fenomeni di maltempo diffuso.`;
+        s2=` Rispetto a **${prevLbl}**, il geopotenziale è già sceso sensibilmente (da ${Math.round(prev.fvg)} a ${Math.round(cur.fvg)} dam) — fase più instabile su gran parte del comparto.`;
       }
     } else {
-      s2=` Rispetto a **${prevLbl}**, il geopotenziale è già risalito sensibilmente (da ${Math.round(prev.fvg)} a ${Math.round(cur.fvg)} dam) — **la stabilizzazione si concretizza proprio in questa giornata**, con miglioramento netto delle condizioni.`;
+      s2=` Rispetto a **${prevLbl}**, il geopotenziale è già risalito (da ${Math.round(prev.fvg)} a ${Math.round(cur.fvg)} dam) — stabilizzazione in atto.`;
     }
   } else if(transition){
     const lbl=aifsDayLabel(transition.day);
@@ -2422,114 +2448,28 @@ function renderAifsSynoptic(){
     const gridValsTrans=AIFS_GRID_DATA.map(p=>({n:p.n,v:p.z500[idxTrans]!=null?p.z500[idxTrans]/10:null})).filter(p=>p.v!=null);
     const minPtTrans=gridValsTrans.length?gridValsTrans.reduce((a,b)=>b.v<a.v?b:a):null;
     const traiettoriaTxt = (minPt&&minPtTrans&&minPt.n!==minPtTrans.n)
-      ? ` Il punto di minima pressione in quota — cioè il cuore del sistema instabile, la zona dove l'atmosfera è più "aperta" e favorevole al maltempo — è atteso spostarsi da **${minPt.n}** verso **${minPtTrans.n}**, indicando la direzione di avanzamento del sistema,`
+      ? ` Il minimo depressionario è atteso spostarsi da **${minPt.n}** verso **${minPtTrans.n}**,`
       : '';
-
     const valAfter=aifsZoneAvg(transition.day);
-    let transType='', transCaratteristiche='';
+    let transType='';
     if(dir==='in calo'){
       const wasAnticiclonico = fvg>578;
       const zAfter=valAfter?.fvg;
-      if(wasAnticiclonico&&zAfter!=null&&zAfter<570){
-        transType='cedimento della struttura anticiclonica con subentro di flusso perturbato';
-        transCaratteristiche='il campo di alta pressione attualmente presente si ritirerà, aprendo la strada a un flusso più instabile da ovest/nord-ovest — atteso un aumento dell\'umidità in quota e delle condizioni favorevoli a fenomeni organizzati';
-      } else if(zAfter!=null&&zAfter<566){
-        transType='approfondimento della saccatura con possibile ingresso di aria fredda in quota';
-        transCaratteristiche='il calo del geopotenziale è marcato — tipico di un affondo depressionario con calo delle temperature in quota (T850) e aumento dello shear, condizioni favorevoli a fenomeni anche intensi';
-      } else {
-        transType='transizione verso condizioni più instabili';
-        transCaratteristiche='il calo di geopotenziale indica un\'atmosfera in fase di destabilizzazione, con probabile aumento della nuvolosità e dell\'instabilità nei bassi-medi strati';
-      }
+      if(wasAnticiclonico&&zAfter!=null&&zAfter<570) transType='cedimento anticiclonico con subentro di flusso perturbato';
+      else if(zAfter!=null&&zAfter<566) transType='approfondimento della saccatura con ingresso di aria fredda in quota';
+      else transType='transizione verso condizioni più instabili';
     } else {
-      const wasInstabile = fvg<572;
-      const zAfter=valAfter?.fvg;
-      if(wasInstabile&&zAfter!=null&&zAfter>578){
-        transType='rimonta anticiclonica con rapida stabilizzazione';
-        transCaratteristiche='il sistema instabile attualmente presente verrà rimpiazzato da un promontorio di alta pressione — atteso un deciso miglioramento con cieli sereni e calo dell\'attività convettiva';
-      } else {
-        transType='rinforzo del campo di alta pressione';
-        transCaratteristiche='il geopotenziale in aumento indica subsidenza in rinforzo — condizioni di stabilità in consolidamento, possibile rialzo termico specie in pianura';
-      }
+      transType = (fvg<572) ? 'rimonta anticiclonica con stabilizzazione' : 'rinforzo del campo di alta pressione';
     }
-
-    s2=` A partire da **${dayNow}**, il pattern è atteso evolvere con **${transType}**, con il cambiamento più marcato **tra ${dayNow} e ${lbl}** (variazione di ${Math.round(transition.delta)} dam sul FVG).${traiettoriaTxt} In pratica, ${transCaratteristiche}.`;
-    if(dir==='in calo'){
-      s2+=` ${sysClass&&(sysClass.tipo.includes('saccatura')||sysClass.tipo.includes('cavo'))?`Il sistema in arrivo (${sysClass.tipo}) con il relativo fronte perturbato`:'Il fronte perturbato associato'} è atteso interessare l'arco alpino orientale entro **${lbl}**.`;
-    }
-  } else if(next&&cur.fvg!=null&&next.fvg!=null){
+    s2=` Nei prossimi giorni **${transType}** atteso **tra ${dayNow} e ${lbl}** (Δ${Math.round(transition.delta)}dam sul comparto).${traiettoriaTxt} interessando anche il tempo sul Friuli Venezia Giulia entro **${lbl}**.`;
+  } else if(next&&cur.fvg!=null&&next.fvg!=null&&Math.abs(next.fvg-cur.fvg)>=3){
     const dFvg=next.fvg-cur.fvg;
-    if(Math.abs(dFvg)<3){
-      s2=` Il pattern **si mantiene sostanzialmente stazionario** nelle 24 ore successive a **${dayNow}** (Z500 FVG da ${Math.round(cur.fvg)} a ${Math.round(next.fvg)} dam), senza variazioni significative attese — condizioni sinottiche persistenti.`;
-    } else {
-      const caratt = dFvg>0
-        ? 'segnale di rinforzo della subsidenza, coerente con consolidamento della stabilità'
-        : 'segnale di indebolimento del campo di alta pressione, possibile aumento dell\'instabilità nelle ore successive';
-      s2=` Nelle 24 ore successive a **${dayNow}** si osserva una **tendenza ${dFvg>0?'al rialzo':'al calo'}** del geopotenziale sul FVG (da ${Math.round(cur.fvg)} a ${Math.round(next.fvg)} dam) — ${caratt}.`;
-    }
-  }
-
-  // ── Frase 3: implicazione diretta per il FVG ──
-  let s3='';
-  if(isCutoff){
-    s3=` Per il **Friuli Venezia Giulia** questo si traduce tipicamente in un ruolo marginale rispetto al sistema instabile, con il rischio maggiore che rimane concentrato più a sud: probabile prevalenza di **flusso secco** con bassa attività convettiva locale.`;
-  } else if(fvg<568&&(dOvestCentro!=null&&dOvestCentro<-6)){
-    s3=` Sul **FVG** il valore di Z500 (${Math.round(fvg)} dam) in questa giornata indica un coinvolgimento già diretto nella dinamica instabile — condizioni compatibili con **fenomeni organizzati**, specie se confermato dal dettaglio dei parametri locali (CAPE, shear) nella tab Monitor.`;
-  } else if(fvg>578){
-    s3=` Sul **FVG** il geopotenziale elevato (${Math.round(fvg)} dam) in questa giornata è coerente con **stabilità e possibile rialzo termico**, bassa probabilità di fenomeni organizzati.`;
+    s2=` Tendenza **${dFvg>0?'al rialzo':'al calo'}** del geopotenziale nelle 24 ore successive (${Math.round(cur.fvg)}→${Math.round(next.fvg)} dam).`;
   } else {
-    s3=` Sul **FVG** (Z500 ${Math.round(fvg)} dam) la situazione resta da monitorare — il segnale sinottico non è ancora decisivo, verificare l'evoluzione dei parametri locali per il dettaglio a breve termine.`;
+    s2=` Pattern **sostanzialmente stazionario** nelle 24 ore successive.`;
   }
 
-  // ── Frase 3b: pressione, venti in quota (500/700/850hPa) e ventilazione al suolo ──
-  let s3b='';
-  if(AIFS_DET&&AIFS_DET.hourly){
-    const idx=AIFS_DAY*24;
-    const h=AIFS_DET.hourly;
-    const mslpNow = h.surface_pressure?.[idx]!=null?Math.round(h.surface_pressure[idx]):null; // già in hPa (AIFS via Open-Meteo)
-    const w500d=degToCard(h.wind_direction_500hPa?.[idx]);
-    const w700d=degToCard(h.wind_direction_700hPa?.[idx]);
-    const w850d=degToCard(h.wind_direction_850hPa?.[idx]);
-    const w10d=degToCard(h.wind_direction_10m?.[idx]);
-    const w10s=h.wind_speed_10m?.[idx]!=null?Math.round(h.wind_speed_10m[idx]):null;
-
-    if(mslpNow!=null||w500d!=='--'){
-      const mslpTxt = mslpNow!=null?`pressione al suolo stimata attorno a **${mslpNow} hPa**`:'';
-      const ventoQuotaTxt = (w500d!=='--'||w700d!=='--'||w850d!=='--')
-        ? ` In quota il flusso sul FVG proviene da **${w500d}** a 500hPa, da **${w700d}** a 700hPa e da **${w850d}** a 850hPa`
-        : '';
-      let ventoSuoloTxt='';
-      if(w10d!=='--'&&w10s!=null){
-        const intensita = w10s<10?'debole':w10s<25?'moderata':w10s<45?'sostenuta':'forte';
-        ventoSuoloTxt = ` — ventilazione al suolo prevista **${intensita}** da ${w10d} (~${w10s}km/h)`;
-        if(w10d==='NE'&&w10s>=25) ventoSuoloTxt+=', possibile accentuazione da Bora sul Carso/golfo di Trieste';
-      }
-      s3b=` ${mslpTxt}${mslpTxt&&ventoQuotaTxt?'.':''}${ventoQuotaTxt}${ventoSuoloTxt}.`;
-    }
-  }
-
-  // ── Frase 3c: precipitazioni attese per zona, con attendibilità crescente avvicinandosi ──
-  let s3c='';
-  if(AIFS_PRECIP&&AIFS_PRECIP.length){
-    const dayVals=AIFS_PRECIP.map(pt=>({n:pt.n,v:pt.daily[AIFS_DAY]??null})).filter(p=>p.v!=null);
-    if(dayVals.length){
-      const totMax=Math.max(...dayVals.map(p=>p.v));
-      if(totMax>=2){
-        // Ordina dal più piovoso al meno piovoso per raccontare le zone più colpite
-        const sorted=[...dayVals].sort((a,b)=>b.v-a.v);
-        const top=sorted.slice(0,2).filter(p=>p.v>=2);
-        const low=sorted.slice(-2).filter(p=>p.v<sorted[0].v*0.6);
-        if(top.length){
-          const topTxt=top.map(p=>`${p.n} (~${Math.round(p.v)}mm)`).join(' e ');
-          const lowTxt=low.length?` mentre su ${low.map(p=>p.n).join(' e ')} i quantitativi attesi sono più contenuti (~${Math.round(low[low.length-1].v)}mm)`:'';
-          s3c=` Le precipitazioni più probabili si concentrerebbero su **${topTxt}**,${lowTxt}.`;
-        }
-      } else {
-        s3c=` Precipitazioni non significative attese sulla regione in questa giornata.`;
-      }
-    }
-  }
-
-  // ── Frase 4: attendibilità (ensemble spread se disponibile) ──
+  // ── Attendibilità Blocco 1 ──
   let s4='';
   const daysOut=AIFS_DAY;
   if(AIFS_ENS&&AIFS_ENS.hourly){
@@ -2539,28 +2479,97 @@ function renderAifsSynoptic(){
     if(vals.length>1){
       const spread=Math.max(...vals)-Math.min(...vals);
       const conf=spread<6?'buona':spread<14?'moderata':'bassa';
-      s4=` ⚠️ *Attendibilità*: a ${daysOut} giorn${daysOut===1?'o':'i'} di distanza il segnale mostra un'affidabilità **${conf}** — spread ensemble di ${Math.round(spread)} dam su ${vals.length} membri sul punto FVG.`;
+      s4=` ⚠️ *Attendibilità*: a ${daysOut} giorn${daysOut===1?'o':'i'} di distanza, affidabilità **${conf}** (spread ensemble ${Math.round(spread)} dam, ${vals.length} membri).`;
     }
   }
   if(!s4&&daysOut>=2){
-    s4=` ⚠️ A ${daysOut} giorni di distanza il quadro resta indicativo — consigliato monitorare i prossimi aggiornamenti per conferma.`;
+    s4=` ⚠️ A ${daysOut} giorni di distanza il quadro resta indicativo.`;
   }
-  // Nota attendibilità specifica per le precipitazioni, se presenti — linguaggio che
-  // cambia avvicinandosi all'evento (coerente col sistema di pin/tracciamento)
+
+  // ═══════════════════════════════════════════════════
+  // BLOCCO 2 — DETTAGLIO FRIULI VENEZIA GIULIA (stile bollettino tecnico)
+  // ═══════════════════════════════════════════════════
+  let fvgLines=[];
+  if(AIFS_DET&&AIFS_DET.hourly){
+    const idx=AIFS_DAY*24;
+    const h=AIFS_DET.hourly;
+    const cloud=h.cloud_cover?.[idx];
+    const t2m=h.temperature_2m?.[idx];
+    const t850v=h.temperature_850hPa?.[idx];
+    const mslpV=h.surface_pressure?.[idx]!=null?Math.round(h.surface_pressure[idx]):null;
+    const w500d=degToCard(h.wind_direction_500hPa?.[idx]);
+    const w700d=degToCard(h.wind_direction_700hPa?.[idx]);
+    const w850d=degToCard(h.wind_direction_850hPa?.[idx]);
+    const w10d=degToCard(h.wind_direction_10m?.[idx]);
+    const w10s=h.wind_speed_10m?.[idx]!=null?Math.round(h.wind_speed_10m[idx]):null;
+
+    if(cloud!=null) fvgLines.push(`**Cielo**: ${cloudDesc(cloud)} (copertura ~${Math.round(cloud)}%)${cloud>=50&&AIFS_DAY>0?', in aumento di nuvolosità da ovest':''}.`);
+    if(w500d!=='--') fvgLines.push(`**Venti in quota**: da ${w500d} a 500hPa, da ${w700d} a 700hPa, da ${w850d} a 850hPa.`);
+    if(w10d!=='--'&&w10s!=null){
+      const intensita = w10s<10?'debole':w10s<25?'moderata':w10s<45?'sostenuta':'forte';
+      let vTxt=`**Ventilazione al suolo**: ${intensita} da ${w10d} (~${w10s}km/h)`;
+      if(w10d==='NE'&&w10s>=25) vTxt+=', possibile accentuazione da Bora sul Carso/golfo di Trieste';
+      fvgLines.push(vTxt+'.');
+    }
+    if(t850v!=null||t2m!=null){
+      let tTxt='**Temperature**: ';
+      if(t850v!=null) tTxt+=`~${t850v.toFixed(0)}°C a 850hPa`;
+      if(t2m!=null) tTxt+=`${t850v!=null?', ':''}al suolo attorno a ${Math.round(t2m)}°C`;
+      fvgLines.push(tTxt+'.');
+    }
+    if(mslpV!=null){
+      const trendP = deltaFromPrev!=null ? (deltaFromPrev<-2?', in calo':deltaFromPrev>2?', in aumento':', stabile') : '';
+      fvgLines.push(`**Pressione**: ${mslpV} hPa${trendP}.`);
+    }
+  }
+
+  // Precipitazioni per zona con eventuale menzione di fenomeni forti/convergenze
+  let precipTxt='';
+  if(AIFS_PRECIP&&AIFS_PRECIP.length){
+    const dayVals=AIFS_PRECIP.map(pt=>({n:pt.n,v:pt.daily[AIFS_DAY]??null})).filter(p=>p.v!=null);
+    if(dayVals.length){
+      const totMax=Math.max(...dayVals.map(p=>p.v));
+      if(totMax>=2){
+        const sorted=[...dayVals].sort((a,b)=>b.v-a.v);
+        const top=sorted.slice(0,2).filter(p=>p.v>=2);
+        const low=sorted.slice(-2).filter(p=>p.v<sorted[0].v*0.6);
+        if(top.length){
+          const topTxt=top.map(p=>`${p.n} (~${Math.round(p.v)}mm)`).join(' e ');
+          const lowTxt=low.length?`, mentre su ${low.map(p=>p.n).join(' e ')} quantitativi più contenuti (~${Math.round(low[low.length-1].v)}mm)`:'';
+          precipTxt=`**Precipitazioni**: possibili su **${topTxt}**${lowTxt}`;
+          if(totMax>=25) precipTxt+=' — non esclusi fenomeni localmente forti, con possibili linee di convergenza sulla pianura centro-orientale';
+          precipTxt+='.';
+        }
+      } else {
+        precipTxt='**Precipitazioni**: non significative attese sulla regione in questa giornata.';
+      }
+    }
+  }
+  if(precipTxt) fvgLines.push(precipTxt);
+
   let s4precip='';
-  if(s3c&&s3c.includes('concentrerebbero')){
-    if(daysOut>=5) s4precip=` Sui quantitativi, attendibilità **bassa** a questa distanza — zone e valori potranno variare sensibilmente nei prossimi aggiornamenti.`;
-    else if(daysOut>=3) s4precip=` Sui quantitativi, attendibilità **moderata** — il quadro si sta delineando ma zone e valori sono ancora indicativi.`;
-    else if(daysOut>=1) s4precip=` Sui quantitativi, attendibilità **buona** — a questa distanza il quadro precipitativo è generalmente più stabile.`;
+  if(precipTxt&&precipTxt.includes('possibili su')){
+    if(daysOut>=5) s4precip=`Attendibilità quantitativi: **bassa** a questa distanza.`;
+    else if(daysOut>=3) s4precip=`Attendibilità quantitativi: **moderata**.`;
+    else if(daysOut>=1) s4precip=`Attendibilità quantitativi: **buona**.`;
   }
 
   const bold=t=>t.replace(/\*\*(.+?)\*\*/g,'<span style="color:#E2E8F0;font-weight:700">$1</span>');
 
   el.innerHTML=`
     <div style="font-size:11.5px;line-height:1.8;color:#94A3B8">
-      ${bold(s1)}${bold(s2)}${bold(s3)}${bold(s3b)}${bold(s3c)}${bold(s4precip)}
+      ${bold(s1)}${bold(s1jet)}${bold(s2)}
     </div>
-    ${s4?`<div style="margin-top:10px;padding:7px 9px;background:#0A0A00;border-radius:6px;font-size:9.5px;color:#94A3B8;line-height:1.5">${s4}</div>`:''}
+    ${s4?`<div style="margin-top:8px;padding:7px 9px;background:#0A0A00;border-radius:6px;font-size:9.5px;color:#94A3B8;line-height:1.5">${s4}</div>`:''}
+
+    <div style="margin-top:14px;padding-top:12px;border-top:1px solid #1A2E45">
+      <div style="font-size:9px;color:#06B6D4;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:7px">📍 Dettaglio Friuli Venezia Giulia</div>
+      <div style="font-size:10.5px;line-height:1.9;color:#94A3B8">
+        ${fvgLines.map(l=>bold(l)).join('<br>')}
+      </div>
+      ${s4precip?`<div style="margin-top:7px;font-size:9px;color:#64748B">${bold(s4precip)}</div>`:''}
+    </div>
+
     <div style="margin-top:9px;font-size:8px;color:#1E3050">
       Dati grezzi (${dayNow}): Z500 FVG ${Math.round(fvg)}dam · Atlantico ${cur.atlantico!=null?Math.round(cur.atlantico):'--'} · Artico ${cur.artico!=null?Math.round(cur.artico):'--'} · Est ${es!=null?Math.round(es):'--'} · It.Sud ${cur.italiaSud!=null?Math.round(cur.italiaSud):'--'} · N.Africa ${cur.sudOvest!=null?Math.round(cur.sudOvest):'--'}
     </div>`;
